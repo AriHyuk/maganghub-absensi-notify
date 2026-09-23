@@ -60,12 +60,13 @@ function saveState(state) {
   }
 }
 
-async function sendTelegramNotification(text, targetChatId = CHAT_ID) {
+async function sendTelegramNotification(text, targetChatId = CHAT_ID, replyMarkup = null) {
   const tgUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   await axios.post(tgUrl, {
     chat_id: targetChatId,
     text,
     parse_mode: 'HTML',
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   });
 }
 
@@ -106,19 +107,32 @@ async function checkStatus(date) {
     const todayRecord = items.find((item) => item.date === targetDate);
 
     // FITUR 2: REMINDER JAM 15:00 WIB (JAM 3 SORE)
-    // Jika belum ada record clock-in/jurnal hari ini pada hari kerja dan jam sudah >= 15:00 WIB
     if (!todayRecord) {
       console.log(`⚠️ Belum ada catatan absensi untuk tanggal ${targetDate}.`);
       
       if (isWeekdayWIB() && currentHour >= 15 && currentHour < 18 && state.reminderDate !== targetDate) {
         console.log('⏰ Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder Telegram...');
-        await sendTelegramNotification(
-          `⏰ <b>Pengingat Absensi & Jurnal Magang (Jam 3 Sore)!</b>\n\n` +
-          `Halo! Sistem mendeteksi kamu <b>belum mengisi absensi/jurnal</b> untuk hari ini (<code>${targetDate}</code>).\n\n` +
-          `💡 <i>Mau dibikinin draf jurnal formal? Balas bot ini dengan:</i>\n` +
-          `<code>/draft &lt;kegiatan kamu hari ini&gt;</code>\n\n` +
-          `<i>Segera lengkapi sebelum jam kerja berakhir ya! Semangat! 💪</i>`
-        );
+        const reminderText =
+          `⚠️ <b>Last call — isi laporan harian sebelum jam 4, jangan ketinggalan!</b>\n` +
+          `📅 Tanggal: <code>${targetDate}</code>\n\n` +
+          `🔗 <b>Langsung isi di sini:</b>\n` +
+          `https://monev.maganghub.kemnaker.go.id/dashboard/riwayat\n\n` +
+          `💡 <i>Males mikir kata-katanya? Ketik aja:</i>\n` +
+          `<code>/draft &lt;apa yang lo kerjain hari ini&gt;</code>\n` +
+          `<i>(Nanti gue yang ubah jadi bahasa korporat formal buat lo copas)</i>`;
+
+        const inlineButton = {
+          inline_keyboard: [
+            [
+              {
+                text: '🌐 Buka Portal MagangHub',
+                url: 'https://monev.maganghub.kemnaker.go.id/dashboard/riwayat',
+              },
+            ],
+          ],
+        };
+
+        await sendTelegramNotification(reminderText, CHAT_ID, inlineButton);
         state.reminderDate = targetDate;
         saveState(state);
       }
