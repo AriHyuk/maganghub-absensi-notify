@@ -35,39 +35,12 @@ export async function getGajianReadiness(token, cookie) {
   const data = res.data?.data;
   if (!data) throw new Error('Data klaim tidak ditemukan dari server.');
 
-  const {
-    ready,
-    period_start,
-    period_end,
-    submission_window,
-    requirements,
-    blockers = [],
-  } = data;
-
-  // Format Tanggal
+  const submission_window = data.submission_window || {};
   const opensAt = new Date(submission_window.opens_at);
   const closesAt = new Date(submission_window.closes_at);
   const isOpen = submission_window.is_open;
 
-  const opensStr = opensAt.toLocaleString('id-ID', {
-    timeZone: 'Asia/Jakarta',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }) + ' WIB';
-
-  const closesStr = closesAt.toLocaleString('id-ID', {
-    timeZone: 'Asia/Jakarta',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }) + ' WIB';
-
-  // Hitung countdown
+  // Hitung countdown ringkas
   const now = new Date();
   let countdownText = '';
   if (isOpen) {
@@ -80,42 +53,9 @@ export async function getGajianReadiness(token, cookie) {
     countdownText = `🔒 Periode pengajuan telah ditutup.`;
   }
 
-  // Berkas Peserta
-  const rekIcon = requirements?.bank_account ? '✅ LENGKAP' : '❌ BELUM ADA';
-  const spmIcon = requirements?.internship_agreement ? '✅ LENGKAP' : '❌ BELUM ADA';
-
-  // Blocker Mentor
-  const attendanceBlocker = blockers.find((b) => b.code === 'ATTENDANCE_PENDING_APPROVAL');
-  const reportBlocker = blockers.find((b) => b.code === 'MONTHLY_REPORT_INCOMPLETE');
-
-  let attendanceStatus = '✅ Seluruh kehadiran telah disetujui';
-  if (attendanceBlocker) {
-    const pendingDates = attendanceBlocker.dates?.join(', ') || '-';
-    attendanceStatus = `❌ Menunggu keputusan mentor (Tanggal: <code>${pendingDates}</code>)`;
-  }
-
-  const reportStatus = reportBlocker
-    ? '❌ Belum diselesaikan oleh mentor'
-    : '✅ Telah diselesaikan oleh mentor';
-
-  const readyBadge = ready
-    ? '🟢 <b>SIAP DIAJUKAN OLEH MENTOR!</b>'
-    : '🟡 <b>Persyaratan Belum Lengkap (Menunggu Mentor)</b>';
-
   return (
     `💸 <b>STATUS PENGAJUAN UANG SAKU MAGANG</b>\n` +
-    `🗓️ <i>Periode: ${period_start} s/d ${period_end}</i>\n\n` +
-    `⏰ <b>Jendela Pengajuan (Waktu Sangat Terbatas):</b>\n` +
-    `• Buka: <b>${opensStr}</b>\n` +
-    `• Tutup: <b>${closesStr}</b>\n` +
     `• Status: ${countdownText}\n\n` +
-    `📋 <b>Kesiapan Berkas Peserta:</b>\n` +
-    `• Rekening Bank: ${rekIcon}\n` +
-    `• Surat Perjanjian Magang: ${spmIcon}\n\n` +
-    `🚧 <b>Kesiapan Pihak Mentor:</b>\n` +
-    `• Tinjau Kehadiran: ${attendanceStatus}\n` +
-    `• Evaluasi Bulanan: ${reportStatus}\n\n` +
-    `🎯 <b>Kesimpulan:</b>\n${readyBadge}\n\n` +
     `<i>💡 Catatan: Yang berhak mengklik tombol "Ajukan Pembayaran" adalah <b>Mentor</b> kamu. Pastikan ingatkan mentor saat jendela dibuka ya!</i>`
   );
 }
