@@ -35,7 +35,9 @@ jobs:
 
       - name: Run status check
         env:
-          SESSION_COOKIE: ${{ secrets.SESSION_COOKIE }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          PARTICIPANT_ID: ${{ secrets.PARTICIPANT_ID }}
+          COOKIE: ${{ secrets.COOKIE }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: node main.js --once
