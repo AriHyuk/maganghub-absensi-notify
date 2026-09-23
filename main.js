@@ -5,6 +5,7 @@ import axios from 'axios';
 import { generateJournalDraft, generateMorningMotivation } from './ai.js';
 import { getMonthlyRekap } from './rekap.js';
 import { getGajianReadiness, calculateDaysRemaining } from './gajian.js';
+import { getSession, saveSession } from './sessionStore.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const PARTICIPANT_ID = process.env.PARTICIPANT_ID;
@@ -108,7 +109,10 @@ async function checkStatus(date) {
     saveState(state);
   }
 
-  const bearerHeader = AUTH_TOKEN.startsWith('Bearer ') ? AUTH_TOKEN : `Bearer ${AUTH_TOKEN}`;
+  const session = await getSession();
+  const currentToken = session.token || AUTH_TOKEN;
+  const currentCookie = session.cookie || COOKIE;
+  const bearerHeader = currentToken.startsWith('Bearer ') ? currentToken : `Bearer ${currentToken}`;
 
   // Rentang query: minta dari 7 hari lalu s.d hari ini
   const [year, month, day] = targetDate.split('-').map(Number);
@@ -122,7 +126,7 @@ async function checkStatus(date) {
     const res = await axios.get(url, {
       headers: {
         Authorization: bearerHeader,
-        ...(COOKIE ? { Cookie: COOKIE } : {}),
+        ...(currentCookie ? { Cookie: currentCookie } : {}),
         Origin: 'https://monev.maganghub.kemnaker.go.id',
         Referer: 'https://monev.maganghub.kemnaker.go.id/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -287,6 +291,24 @@ async function pollTelegramCommands() {
         } catch (e) {
           await sendTelegramNotification(`❌ Gagal memuat status gajian: ${e.message}`, senderChatId);
         }
+      } else if (text.startsWith('/token') || (text.startsWith('eyJ') && text.length > 100)) {
+        const rawToken = text.replace(/^\/token\s*/i, '').trim();
+        if (rawToken) {
+          await saveSession({ token: rawToken });
+          await sendTelegramNotification(
+            '✅ <b>Token Berhasil Diperbarui!</b> 🎉\n\n' +
+            'Sesi MagangHub kamu sekarang aktif dan tersimpan ke .env / .state.json. Silakan cek dengan <code>/status</code> atau <code>/gajian</code>.',
+            senderChatId
+          );
+        }
+      } else if (text.startsWith('/sync')) {
+        await sendTelegramNotification(
+          `⚡ <b>Sinkronisasi 1-Klik dari Browser:</b>\n\n` +
+          `Gak perlu lagi buka Vercel! Cukup pasang bookmarklet 1-klik di browser kamu:\n` +
+          `🌐 Buka: https://maganghub-absensi-notify.vercel.app\n\n` +
+          `Tarik tombol <b>🚀 Sync MagangHub Bot</b> ke Bookmark Bar browsermu. Setiap kali buka web Kemnaker, cukup klik tombol itu sekali!`,
+          senderChatId
+        );
       } else if (text.startsWith('/draft')) {
         const rawContent = text.replace(/^\/draft\s*/i, '');
         await sendTelegramNotification('⏳ <i>Sedang meracik draf jurnal formal untukmu...</i>', senderChatId);

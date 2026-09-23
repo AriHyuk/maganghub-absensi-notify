@@ -118,6 +118,27 @@ pm2 start main.js --name "magang-bot"
 
 ---
 
+## ⚡ Sinkronisasi Token Otomatis (Tanpa Buka Vercel!)
+
+Kamu punya 2 cara instan untuk memperbarui token tanpa harus membuka Vercel Dashboard:
+
+### Opsi 1: Bookmarklet Browser 1-Klik (Paling Praktis)
+1. Buka link web bot kamu: `https://maganghub-absensi-notify.vercel.app`
+2. Tarik (drag & drop) tombol **🚀 Sync MagangHub Bot** ke Bookmark Bar browsermu (Chrome/Edge/Firefox).
+3. Kapanpun kamu membuka portal [monev.maganghub.kemnaker.go.id](https://monev.maganghub.kemnaker.go.id), cukup klik tombol bookmark tersebut **1 kali**.
+4. Sesi aktif akan otomatis disinkronkan ke bot Telegram dalam 1 detik!
+
+### Opsi 2: Update Langsung dari Chat Telegram
+Cukup copas token JWT (yang diawali `eyJ...`) langsung ke chat Telegram bot, atau gunakan perintah:
+```text
+/token eyJhbGciOi...
+```
+Bot akan langsung mengenali dan menyimpan token baru tersebut.
+
+*(Opsional)* Jika ingin token persisten 100% di cloud Vercel selamanya, buka Vercel Dashboard > Tab **Storage** > Klik **Create Database** > Pilih **KV (Upstash)** > Connect to Project. Selesai!
+
+---
+
 ## 📱 Daftar Perintah Chat Telegram
 
 | Perintah | Deskripsi |
@@ -126,11 +147,14 @@ pm2 start main.js --name "magang-bot"
 | **`/gajian`** | Memeriksa kesiapan pengajuan uang saku, countdown jendela klaim, dan rincian blocker |
 | **`/rekap`** | Menampilkan dashboard statistik bulanan, progress bar magang, dan countdown sisa hari |
 | **`/draft <kegiatan>`** | Meracik catatan kerja kasar menjadi draf jurnal formal berstandar Kemnaker (3 format seksi) menggunakan AI |
-| **`/help`** | Menampilkan panduan penggunaan bot |
+| **`/token <token>`** | Memperbarui token akses MagangHub langsung dari chat Telegram tanpa buka Vercel |
+| **`/sync`** | Menampilkan panduan dan link Bookmarklet 1-klik dari browser |
+| **`/help`** | Menampilkan panduan bantuan bot |
 
 ---
 
 ## 🔒 Catatan Keamanan
 - File `.env` dan `.state.json` sudah terdaftar di `.gitignore` sehingga tidak akan pernah terunggah ke repositori publik.
 - Nilai token dan credential hanya disimpan secara aman di environment Vercel dan GitHub Encrypted Secrets.
+
 

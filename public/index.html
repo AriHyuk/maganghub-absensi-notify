@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MagangHub Bot — 1-Click Sync</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --border: rgba(255, 255, 255, 0.1);
+      --accent: #3b82f6;
+      --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      max-width: 580px;
+      width: 100%;
+      padding: 36px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.desc {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+    .step-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .step-title {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bookmark-btn {
+      display: inline-block;
+      background: var(--accent-gradient);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      cursor: grab;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.35);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .bookmark-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.5);
+    }
+    .code-box {
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #cbd5e1;
+      word-break: break-all;
+      margin-top: 10px;
+      user-select: all;
+    }
+    .copy-btn {
+      margin-top: 8px;
+      background: #334155;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .copy-btn:hover { background: #475569; }
+    .badge {
+      display: inline-block;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">⚡ Instant 1-Click Sync</span>
+    <h1>Sync Sesi MagangHub ke Telegram Bot</h1>
+    <p class="desc">
+      Gak perlu lagi buka Vercel Dashboard atau edit environment variables manual. Cukup gunakan tombol bookmark di bawah ini saat kamu sedang berada di portal MagangHub!
+    </p>
+
+    <div class="step-box">
+      <div class="step-title">📌 Cara Pasang (Hanya Sekali)</div>
+      <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 14px;">
+        Tarik (drag & drop) tombol di bawah ini ke <b>Bookmark Bar</b> browsermu:
+      </p>
+      <a class="bookmark-btn" href="javascript:(function(){const s=document.createElement('script');s.src='https://maganghub-absensi-notify.vercel.app/sync.js?'+Date.now();document.body.appendChild(s);})();">
+        🚀 Sync MagangHub Bot
+      </a>
+      <p style="font-size: 12px; color: #64748b; margin-top: 12px;">
+        Atau jika di browser HP / tidak bisa drag, buat bookmark baru secara manual dengan URL berikut:
+      </p>
+      <div class="code-box" id="bmCode">javascript:(function(){const s=document.createElement('script');s.src='https://maganghub-absensi-notify.vercel.app/sync.js?'+Date.now();document.body.appendChild(s);})();</div>
+      <button class="copy-btn" onclick="copyCode()">📋 Salin Kode Bookmarklet</button>
+    </div>
+
+    <div class="step-box" style="margin-bottom: 0;">
+      <div class="step-title">💡 Cara Pakai Sehari-hari</div>
+      <ol style="font-size: 14px; color: var(--text-muted); line-height: 1.8; padding-left: 20px;">
+        <li>Buka portal <a href="https://monev.maganghub.kemnaker.go.id" target="_blank" style="color: #60a5fa;">monev.maganghub.kemnaker.go.id</a>.</li>
+        <li>Klik tombol bookmark <b>🚀 Sync MagangHub Bot</b> di browser kamu.</li>
+        <li>Selesai! Bot Telegram kamu langsung terhubung dan siap dipakai.</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    function copyCode() {
+      const code = document.getElementById('bmCode').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('✅ Kode bookmarklet berhasil disalin!');
+      });
+    }
+  </script>
+</body>
+</html>
