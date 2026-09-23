@@ -1,0 +1,41 @@
+name: Check MagangHub Absensi Status
+
+on:
+  # Trigger berkala: Senin - Jumat, tiap 30 menit dari jam 08:00 s.d 18:00 WIB (01:00 - 11:00 UTC)
+  schedule:
+    - cron: '*/30 1-11 * * 1-5'
+
+  # Izinkan trigger manual dari tab 'Actions' di GitHub
+  workflow_dispatch:
+
+jobs:
+  check-absensi:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore notification state cache
+        uses: actions/cache@v4
+        with:
+          path: .state.json
+          key: state-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            state-${{ runner.os }}-
+
+      - name: Run status check
+        env:
+          SESSION_COOKIE: ${{ secrets.SESSION_COOKIE }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: node main.js --once
