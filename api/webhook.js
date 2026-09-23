@@ -3,9 +3,9 @@ import { generateJournalDraft } from '../ai.js';
 
 const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 const ALLOWED_CHAT_ID = process.env.TG_CHAT_ID;
-const AUTH_TOKEN = process.env.AUTH_TOKEN;
+let currentAuthToken = process.env.AUTH_TOKEN;
 const PARTICIPANT_ID = process.env.PARTICIPANT_ID;
-const COOKIE = process.env.COOKIE;
+let currentCookie = process.env.COOKIE;
 
 function getTodayWIB() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -26,26 +26,88 @@ async function sendTelegram(chatId, text) {
   });
 }
 
-async function getMagangStatus() {
+/**
+ * Mencoba merefresh token menggunakan monev_refresh_token yang ada di Cookie
+ */
+async function refreshAccessToken() {
+  if (!currentCookie) return null;
+  console.log('🔄 Mencoba auto-refresh access token ke MagangHub...');
+  try {
+    const res = await axios.post(
+      'https://monev-api.maganghub.kemnaker.go.id/api/v1/auth/refresh',
+      null,
+      {
+        headers: {
+          Cookie: currentCookie,
+          Origin: 'https://monev.maganghub.kemnaker.go.id',
+          Referer: 'https://monev.maganghub.kemnaker.go.id/',
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36',
+          'x-frontend-build-id': '5554ff014eccd220f80524df263ae513d8ce1e25-production',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const newToken = res.data?.access_token || res.data?.token || res.data?.data?.token;
+    if (newToken) {
+      console.log('✅ Auto-refresh token BERHASIL!');
+      currentAuthToken = newToken;
+
+      // Update cookie jika ada set-cookie baru
+      const setCookies = res.headers['set-cookie'];
+      if (setCookies && setCookies.length > 0) {
+        currentCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+      }
+      return newToken;
+    }
+  } catch (err) {
+    console.error('⚠️ Auto-refresh gagal:', err.response?.data || err.message);
+  }
+  return null;
+}
+
+async function fetchAttendanceData(token) {
   const today = getTodayWIB();
   const [year, month, day] = today.split('-').map(Number);
   const startDateObj = new Date(Date.UTC(year, month - 1, day - 7));
   const startDate = startDateObj.toISOString().split('T')[0];
 
-  const bearerHeader = AUTH_TOKEN?.startsWith('Bearer ') ? AUTH_TOKEN : `Bearer ${AUTH_TOKEN}`;
+  const bearerHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
   const url = `https://monev-api.maganghub.kemnaker.go.id/api/v1/attendances?participant_id=${PARTICIPANT_ID}&start_date=${startDate}&end_date=${today}`;
 
+  return await axios.get(url, {
+    headers: {
+      Authorization: bearerHeader,
+      ...(currentCookie ? { Cookie: currentCookie } : {}),
+      Origin: 'https://monev.maganghub.kemnaker.go.id',
+      Referer: 'https://monev.maganghub.kemnaker.go.id/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+    timeout: 10000,
+  });
+}
+
+async function getMagangStatus() {
+  const today = getTodayWIB();
+
   try {
-    const res = await axios.get(url, {
-      headers: {
-        Authorization: bearerHeader,
-        ...(COOKIE ? { Cookie: COOKIE } : {}),
-        Origin: 'https://monev.maganghub.kemnaker.go.id',
-        Referer: 'https://monev.maganghub.kemnaker.go.id/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      timeout: 10000,
-    });
+    let res;
+    try {
+      res = await fetchAttendanceData(currentAuthToken);
+    } catch (firstErr) {
+      // Jika 401 Unauthorized, coba AUTO-REFRESH!
+      if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
+        console.log('⚠️ Token expired (401), memicu mekanisme auto-refresh...');
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          res = await fetchAttendanceData(newToken);
+        } else {
+          throw firstErr;
+        }
+      } else {
+        throw firstErr;
+      }
+    }
 
     const items = res.data?.data || [];
     const todayRecord = items.find((i) => i.date === today);
@@ -66,14 +128,17 @@ async function getMagangStatus() {
     );
   } catch (err) {
     if (err.response?.status === 401 || err.response?.status === 403) {
-      return '❌ <b>Gagal cek status:</b> Token MagangHub kamu sudah expired (401). Silakan perbarui <code>AUTH_TOKEN</code>!';
+      return (
+        '❌ <b>Gagal cek status (401 Unauthorized):</b>\n' +
+        'Token dan refresh session kamu di Vercel sudah kedaluwarsa atau belum di-update dengan token terbaru.\n\n' +
+        '👉 <i>Solusi: Update variabel <code>AUTH_TOKEN</code> dan <code>COOKIE</code> di Vercel Project Settings dengan nilai terbaru dari .env!</i>'
+      );
     }
     return `❌ <b>Gagal cek status:</b> ${err.message}`;
   }
 }
 
 export default async function handler(req, res) {
-  // Health check endpoint
   if (req.method === 'GET') {
     return res.status(200).json({ status: 'ok', service: 'MagangHub Bot Vercel Webhook' });
   }
