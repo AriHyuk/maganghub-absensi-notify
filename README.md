@@ -106,6 +106,7 @@ pm2 start main.js --name "magang-bot"
 | Perintah | Deskripsi |
 | :--- | :--- |
 | **`/status`** | Mengecek status kehadiran dan status persetujuan mentor hari ini secara instan |
+| **`/rekap`** | Menampilkan dashboard statistik bulanan, progress bar magang, dan countdown sisa hari |
 | **`/draft <kegiatan>`** | Meracik catatan kerja kasar menjadi draf jurnal formal berstandar Kemnaker menggunakan AI |
 | **`/help`** | Menampilkan panduan penggunaan bot |
 

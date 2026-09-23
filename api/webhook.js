@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { generateJournalDraft } from '../ai.js';
+import { getMonthlyRekap } from '../rekap.js';
 
 const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 const ALLOWED_CHAT_ID = process.env.TG_CHAT_ID;
@@ -95,9 +96,8 @@ async function getMagangStatus() {
     try {
       res = await fetchAttendanceData(currentAuthToken);
     } catch (firstErr) {
-      // Jika 401 Unauthorized, coba AUTO-REFRESH!
       if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
-        console.log('⚠️ Token expired (401), memicu mekanisme auto-refresh...');
+        console.log('⚠️ Token expired (401), memicu auto-refresh...');
         const newToken = await refreshAccessToken();
         if (newToken) {
           res = await fetchAttendanceData(newToken);
@@ -130,11 +130,29 @@ async function getMagangStatus() {
     if (err.response?.status === 401 || err.response?.status === 403) {
       return (
         '❌ <b>Gagal cek status (401 Unauthorized):</b>\n' +
-        'Token dan refresh session kamu di Vercel sudah kedaluwarsa atau belum di-update dengan token terbaru.\n\n' +
-        '👉 <i>Solusi: Update variabel <code>AUTH_TOKEN</code> dan <code>COOKIE</code> di Vercel Project Settings dengan nilai terbaru dari .env!</i>'
+        'Token dan refresh session kamu di Vercel sudah kedaluwarsa.\n' +
+        '👉 <i>Solusi: Update variabel <code>AUTH_TOKEN</code> dan <code>COOKIE</code> di Vercel Project Settings!</i>'
       );
     }
     return `❌ <b>Gagal cek status:</b> ${err.message}`;
+  }
+}
+
+async function handleRekap() {
+  try {
+    try {
+      return await getMonthlyRekap(currentAuthToken, currentCookie);
+    } catch (firstErr) {
+      if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          return await getMonthlyRekap(newToken, currentCookie);
+        }
+      }
+      throw firstErr;
+    }
+  } catch (err) {
+    return `❌ <b>Gagal memuat rekap:</b> ${err.response?.data?.message || err.message}`;
   }
 }
 
@@ -170,6 +188,7 @@ export default async function handler(req, res) {
         `👋 <b>Halo! Asisten Absensi & Jurnal MagangHub siap membantu 24/7 di Vercel.</b>\n\n` +
         `Perintah yang tersedia:\n` +
         `• <code>/status</code> - Cek status kehadiran & persetujuan hari ini\n` +
+        `• <code>/rekap</code> - Dashboard statistik bulanan, progress bar & countdown\n` +
         `• <code>/draft &lt;kegiatan&gt;</code> - Generate narasi jurnal formal dengan AI\n` +
         `• <code>/help</code> - Panduan bantuan`
       );
@@ -177,6 +196,10 @@ export default async function handler(req, res) {
       await sendTelegram(senderChatId, '🔍 <i>Sedang mengambil data absensi terbaru dari MagangHub...</i>');
       const statusText = await getMagangStatus();
       await sendTelegram(senderChatId, `📊 <b>Status Absensi MagangHub:</b>\n\n${statusText}`);
+    } else if (text.startsWith('/rekap')) {
+      await sendTelegram(senderChatId, '📊 <i>Sedang mengkalkulasi rekapitulasi kehadiran dan progress magang...</i>');
+      const rekapText = await handleRekap();
+      await sendTelegram(senderChatId, rekapText);
     } else if (text.startsWith('/draft')) {
       const rawContent = text.replace(/^\/draft\s*/i, '');
       await sendTelegram(senderChatId, '⏳ <i>Sedang meracik draf jurnal formal dengan Gemini AI...</i>');
@@ -188,7 +211,7 @@ export default async function handler(req, res) {
     } else {
       await sendTelegram(
         senderChatId,
-        'Perintah tidak dikenali. Ketik <code>/status</code> untuk cek absensi atau <code>/draft &lt;kegiatan&gt;</code> untuk buat draf jurnal.'
+        'Perintah tidak dikenali. Ketik <code>/status</code> untuk cek absensi, <code>/rekap</code> untuk ringkasan bulanan, atau <code>/draft &lt;kegiatan&gt;</code> untuk buat draf jurnal.'
       );
     }
   } catch (error) {

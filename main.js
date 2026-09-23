@@ -208,6 +208,7 @@ async function pollTelegramCommands() {
           `👋 <b>Halo! Asisten Absensi & Jurnal MagangHub siap membantu.</b>\n\n` +
           `Perintah yang tersedia:\n` +
           `• <code>/status</code> - Cek status absensi hari ini\n` +
+          `• <code>/rekap</code> - Dashboard statistik bulanan, progress bar & countdown\n` +
           `• <code>/draft &lt;kegiatan&gt;</code> - Generate teks jurnal formal otomatis dengan AI\n` +
           `• <code>/help</code> - Menampilkan bantuan ini`,
           senderChatId
@@ -222,6 +223,15 @@ async function pollTelegramCommands() {
           `🕒 Terakhir dicek: ${state.updatedAt ? new Date(state.updatedAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : '-'}`,
           senderChatId
         );
+      } else if (text.startsWith('/rekap')) {
+        await sendTelegramNotification('📊 <i>Sedang mengkalkulasi rekapitulasi kehadiran...</i>', senderChatId);
+        try {
+          const { getMonthlyRekap } = await import('./rekap.js');
+          const rekapText = await getMonthlyRekap(AUTH_TOKEN, COOKIE);
+          await sendTelegramNotification(rekapText, senderChatId);
+        } catch (e) {
+          await sendTelegramNotification(`❌ Gagal memuat rekap: ${e.message}`, senderChatId);
+        }
       } else if (text.startsWith('/draft')) {
         const rawContent = text.replace(/^\/draft\s*/i, '');
         await sendTelegramNotification('⏳ <i>Sedang meracik draf jurnal formal untukmu...</i>', senderChatId);
