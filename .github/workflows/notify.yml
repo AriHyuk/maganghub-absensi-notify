@@ -37,6 +37,10 @@ jobs:
           restore-keys: |
             state-${{ runner.os }}-
 
+      - name: Trigger proactive keep-alive refresh on Vercel
+        run: |
+          curl -s https://maganghub-absensi-notify.vercel.app/api/refresh || true
+
       - name: Run status check
         env:
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
