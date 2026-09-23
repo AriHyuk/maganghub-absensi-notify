@@ -8,8 +8,33 @@ let memorySession = {
   updatedAt: null,
 };
 
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_REST_API_TOKEN;
+function getKvCredentials() {
+  const envKeys = Object.keys(process.env);
+  
+  // Prioritas nama standar
+  let url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.REDIS_REST_API_URL || process.env.STORAGE_REST_API_URL || process.env.STORAGE_URL;
+  let token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.REDIS_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || process.env.STORAGE_TOKEN;
+
+  // Fallback: cari otomatis key env apapun yang berakhiran _URL atau _TOKEN dari Upstash/Storage/KV/Redis
+  if (!url) {
+    const foundKey = envKeys.find(k => 
+      (k.includes('REDIS') || k.includes('UPSTASH') || k.includes('KV') || k.includes('STORAGE')) &&
+      (k.endsWith('_URL') || k.endsWith('_REST_API_URL'))
+    );
+    if (foundKey) url = process.env[foundKey];
+  }
+
+  if (!token) {
+    const foundKey = envKeys.find(k => 
+      (k.includes('REDIS') || k.includes('UPSTASH') || k.includes('KV') || k.includes('STORAGE')) &&
+      (k.endsWith('_TOKEN') || k.endsWith('_REST_API_TOKEN'))
+    );
+    if (foundKey) token = process.env[foundKey];
+  }
+
+  return { url, token };
+}
+
 const STATE_FILE = path.resolve('.state.json');
 const ENV_FILE = path.resolve('.env');
 
@@ -22,6 +47,7 @@ const ENV_FILE = path.resolve('.env');
  * 4. process.env
  */
 export async function getSession() {
+  const { url: KV_URL, token: KV_TOKEN } = getKvCredentials();
   if (KV_URL && KV_TOKEN) {
     try {
       const res = await axios.get(`${KV_URL}/get/magang_session`, {
@@ -72,6 +98,7 @@ export async function saveSession({ token, cookie }) {
   memorySession.updatedAt = new Date().toISOString();
 
   // 1. Simpan ke Vercel KV / Upstash Redis
+  const { url: KV_URL, token: KV_TOKEN } = getKvCredentials();
   if (KV_URL && KV_TOKEN) {
     try {
       await axios.post(
