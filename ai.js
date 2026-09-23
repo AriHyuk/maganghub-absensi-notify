@@ -28,15 +28,14 @@ Output HANYA teks jurnal dalam format markdown bersih tanpa kata pembuka/penutup
 /**
  * Panggil AI via Google Gemini API
  */
-async function callGemini(rawInput) {
+async function callGemini(promptText) {
   if (!GEMINI_API_KEY) return null;
-  const prompt = `${SYSTEM_PROMPT}\n\nCatatan Kasar Pengguna:\n"${rawInput}"`;
   const res = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
     {
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts: [{ text: promptText }] }],
       generationConfig: {
-        temperature: 0.3,
+        temperature: 0.7,
         maxOutputTokens: 2048,
       },
     },
@@ -48,17 +47,14 @@ async function callGemini(rawInput) {
 /**
  * Panggil AI via OpenRouter API
  */
-async function callOpenRouter(rawInput) {
+async function callOpenRouter(promptText) {
   if (!OPENROUTER_API_KEY) return null;
   const res = await axios.post(
     'https://openrouter.ai/api/v1/chat/completions',
     {
       model: OPENROUTER_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Catatan Kegiatan Kasar:\n"${rawInput}"` },
-      ],
-      temperature: 0.3,
+      messages: [{ role: 'user', content: promptText }],
+      temperature: 0.7,
       max_tokens: 1000,
     },
     {
@@ -74,42 +70,36 @@ async function callOpenRouter(rawInput) {
 }
 
 /**
- * Generate narasi jurnal formal MagangHub Kemnaker berdasarkan catatan kasar user.
- * Format Resmi:
- * 1. Uraian Aktivitas
- * 2. Pembelajaran yang Diperoleh
- * 3. Kendala yang Dialami
- * @param {string} rawInput - Catatan kegiatan harian santai dari user
- * @returns {Promise<string>} - Hasil narasi jurnal formal siap copas
+ * Generate narasi jurnal formal MagangHub Kemnaker
  */
 export async function generateJournalDraft(rawInput) {
   if (!rawInput || rawInput.trim().length === 0) {
     return 'Silakan sertakan kegiatan kamu, contoh: <code>/draft benerin bug login dan riset api</code>';
   }
 
-  // 1. Prioritas Utama: Gemini 2.5 Flash
+  const fullPrompt = `${SYSTEM_PROMPT}\n\nCatatan Kasar Pengguna:\n"${rawInput}"`;
+
   if (GEMINI_API_KEY) {
     try {
       console.log(`🤖 Menghasilkan draf resmi Kemnaker via Gemini (${GEMINI_MODEL})...`);
-      const result = await callGemini(rawInput);
+      const result = await callGemini(fullPrompt);
       if (result) return result;
     } catch (err) {
       console.warn('⚠️ Gemini API error, mencoba alternatif:', err.response?.data?.error?.message || err.message);
     }
   }
 
-  // 2. Alternatif: OpenRouter
   if (OPENROUTER_API_KEY) {
     try {
       console.log(`🤖 Menghasilkan draf via OpenRouter (${OPENROUTER_MODEL})...`);
-      const result = await callOpenRouter(rawInput);
+      const result = await callOpenRouter(fullPrompt);
       if (result) return result;
     } catch (err) {
       console.warn('⚠️ OpenRouter error / limit:', err.response?.data?.error?.message || err.message);
     }
   }
 
-  // 3. Fallback jika kedua API offline (Tetap sesuai format 3 bagian resmi)
+  // Fallback
   const capitalized = rawInput.charAt(0).toUpperCase() + rawInput.slice(1);
   return (
     `<b>1. Uraian Aktivitas</b>\n` +
@@ -120,5 +110,45 @@ export async function generateJournalDraft(rawInput) {
     `• Memahami alur kerja implementasi sistem dan teknik pemecahan masalah secara lebih sistematis dan terstruktur.\n\n` +
     `<b>3. Kendala yang Dialami</b>\n` +
     `• Tidak ada kendala teknis yang signifikan; seluruh tugas dapat diselesaikan dengan baik melalui koordinasi aktif.`
+  );
+}
+
+/**
+ * Generate kata-kata motivasi pagi jam 05:00 WIB + countdown gajian
+ */
+export async function generateMorningMotivation(daysUntilGajian = 27) {
+  const prompt = `
+Kamu adalah asisten pribadi yang ramah, asik, dan suportif untuk seorang anak magang di MagangHub Kemnaker.
+Tugasmu: Buatkan sapaan selamat pagi jam 05:00 WIB yang segar, ceria, sedikit humor relate khas anak magang/korporat santai (jangan toxic positivity, tapi bikin melek dan semangat).
+Sertakan info bahwa sisa ${daysUntilGajian} hari lagi menuju pembukaan pengajuan uang saku (gajian) tanggal 20 Oktober 2026.
+
+Format yang diinginkan:
+🌅 Sapaan pembuka semangat pagi
+💡 Quote motivasi magang/kerja hari ini (singkat & ngena)
+💸 Countdown gajian (sisa ${daysUntilGajian} hari lagi) & pengingat absen masuk
+
+Output markdown bersih, pakai emoji yang ceria.
+`;
+
+  try {
+    if (GEMINI_API_KEY) {
+      const res = await callGemini(prompt);
+      if (res) return res;
+    }
+    if (OPENROUTER_API_KEY) {
+      const res = await callOpenRouter(prompt);
+      if (res) return res;
+    }
+  } catch (err) {
+    console.warn('⚠️ Gagal generate quote pagi, gunakan template fallback:', err.message);
+  }
+
+  // Template fallback ceria
+  return (
+    `🌅 <b>Selamat Pagi Bro! Semangat Menyambut Hari Baru!</b>\n\n` +
+    `💡 <i>"Kerja keraslah hari ini sampai mentor lo bilang: 'Udah dek, absennya udah saya approve semua, kamu pulang aja'."</i>\n\n` +
+    `💸 <b>Info Uang Saku:</b>\n` +
+    `⏳ <b>H-${daysUntilGajian}</b> menuju pembukaan pengajuan uang saku (20 Oktober 2026)!\n\n` +
+    `Jangan lupa nanti clock-in dan catat progres kerjaan lo ya. Let's get that bread! 🍞🚀`
   );
 }

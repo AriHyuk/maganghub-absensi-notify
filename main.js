@@ -2,7 +2,9 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
-import { generateJournalDraft } from './ai.js';
+import { generateJournalDraft, generateMorningMotivation } from './ai.js';
+import { getMonthlyRekap } from './rekap.js';
+import { getGajianReadiness, calculateDaysRemaining } from './gajian.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const PARTICIPANT_ID = process.env.PARTICIPANT_ID;
@@ -24,7 +26,6 @@ function getTodayWIB() {
   return formatter.format(new Date());
 }
 
-// Helper: dapatkan jam saat ini dalam WIB (angka 0 - 23)
 function getCurrentHourWIB() {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Jakarta',
@@ -34,7 +35,6 @@ function getCurrentHourWIB() {
   return parseInt(formatter.format(new Date()), 10);
 }
 
-// Helper: cek apakah hari ini adalah hari kerja (Senin - Jumat)
 function isWeekdayWIB() {
   const dateStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
   const day = new Date(dateStr).getDay();
@@ -79,6 +79,35 @@ async function checkStatus(date) {
 
   const state = loadState();
 
+  // FITUR: ALARM MOTIVASI PAGI JAM 05:00 WIB
+  if (currentHour === 5 && state.lastMorningAlarmDate !== targetDate) {
+    console.log('🌅 Jam 05:00 WIB terdeteksi! Mengirim salam pagi & motivasi gajian...');
+    const daysUntilGajian = calculateDaysRemaining('2026-10-20T16:00:00+07:00');
+    const motivationMessage = await generateMorningMotivation(daysUntilGajian);
+    await sendTelegramNotification(motivationMessage, CHAT_ID);
+    state.lastMorningAlarmDate = targetDate;
+    saveState(state);
+  }
+
+  // FITUR: ALERT PEMBUKAAN JENDELA PENGAJUAN (20 Oktober Jam 16:00 WIB)
+  if (targetDate === '2026-10-20' && currentHour >= 16 && !state.submissionOpenAlertSent) {
+    console.log('🚨 Jendela pengajuan uang saku resmi dibuka! Mengirim notifikasi darurat...');
+    await sendTelegramNotification(
+      `🚨 <b>PERHATIAN: JENDELA PENGAJUAN UANG SAKU RESMI DIBUKA!</b> 💸\n\n` +
+      `Periode pengajuan uang saku bulan ini telah dibuka mulai <b>pukul 16:00 WIB hari ini</b>.\n` +
+      `⚠️ <b>Batas Akhir:</b> 22 Oktober 2026 pukul 23:59 WIB (HANYA 2 HARI!).\n\n` +
+      `Segera hubungi dan ingatkan <b>Mentor</b> kamu untuk mengklik tombol <b>Ajukan Pembayaran</b> di portal MagangHub sekarang juga!`,
+      CHAT_ID,
+      {
+        inline_keyboard: [
+          [{ text: '🌐 Buka Portal Uang Saku', url: 'https://monev.maganghub.kemnaker.go.id/dashboard/stipend' }],
+        ],
+      }
+    );
+    state.submissionOpenAlertSent = true;
+    saveState(state);
+  }
+
   const bearerHeader = AUTH_TOKEN.startsWith('Bearer ') ? AUTH_TOKEN : `Bearer ${AUTH_TOKEN}`;
 
   // Rentang query: minta dari 7 hari lalu s.d hari ini
@@ -106,7 +135,7 @@ async function checkStatus(date) {
 
     const todayRecord = items.find((item) => item.date === targetDate);
 
-    // FITUR 2: REMINDER JAM 15:00 WIB (JAM 3 SORE)
+    // FITUR: REMINDER JAM 15:00 WIB
     if (!todayRecord) {
       console.log(`⚠️ Belum ada catatan absensi untuk tanggal ${targetDate}.`);
       
@@ -201,7 +230,7 @@ async function checkStatus(date) {
   }
 }
 
-// FITUR 4: TELEGRAM INTERACTIVE LISTENER (/draft, /status, /help)
+// TELEGRAM INTERACTIVE LISTENER
 let lastUpdateId = 0;
 async function pollTelegramCommands() {
   const tgUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=10`;
@@ -219,11 +248,12 @@ async function pollTelegramCommands() {
 
       if (text.startsWith('/start') || text.startsWith('/help')) {
         await sendTelegramNotification(
-          `👋 <b>Halo! Asisten Absensi & Jurnal MagangHub siap membantu.</b>\n\n` +
+          `👋 <b>Halo! Asisten Absensi, Jurnal & Gajian MagangHub siap membantu.</b>\n\n` +
           `Perintah yang tersedia:\n` +
           `• <code>/status</code> - Cek status absensi hari ini\n` +
           `• <code>/rekap</code> - Dashboard statistik bulanan, progress bar & countdown\n` +
-          `• <code>/draft &lt;kegiatan&gt;</code> - Generate teks jurnal formal otomatis dengan AI\n` +
+          `• <code>/gajian</code> - Tracking kesiapan pengajuan uang saku & blocker mentor\n` +
+          `• <code>/draft &lt;kegiatan&gt;</code> - Generate teks jurnal formal 3 bagian resmi\n` +
           `• <code>/help</code> - Menampilkan bantuan ini`,
           senderChatId
         );
@@ -240,18 +270,29 @@ async function pollTelegramCommands() {
       } else if (text.startsWith('/rekap')) {
         await sendTelegramNotification('📊 <i>Sedang mengkalkulasi rekapitulasi kehadiran...</i>', senderChatId);
         try {
-          const { getMonthlyRekap } = await import('./rekap.js');
           const rekapText = await getMonthlyRekap(AUTH_TOKEN, COOKIE);
           await sendTelegramNotification(rekapText, senderChatId);
         } catch (e) {
           await sendTelegramNotification(`❌ Gagal memuat rekap: ${e.message}`, senderChatId);
+        }
+      } else if (text.startsWith('/gajian')) {
+        await sendTelegramNotification('💸 <i>Sedang memeriksa kesiapan pengajuan uang saku ke Kemnaker...</i>', senderChatId);
+        try {
+          const gajianText = await getGajianReadiness(AUTH_TOKEN, COOKIE);
+          await sendTelegramNotification(gajianText, senderChatId, {
+            inline_keyboard: [
+              [{ text: '🌐 Buka Portal Uang Saku', url: 'https://monev.maganghub.kemnaker.go.id/dashboard/stipend' }],
+            ],
+          });
+        } catch (e) {
+          await sendTelegramNotification(`❌ Gagal memuat status gajian: ${e.message}`, senderChatId);
         }
       } else if (text.startsWith('/draft')) {
         const rawContent = text.replace(/^\/draft\s*/i, '');
         await sendTelegramNotification('⏳ <i>Sedang meracik draf jurnal formal untukmu...</i>', senderChatId);
         const draft = await generateJournalDraft(rawContent);
         await sendTelegramNotification(
-          `📝 <b>Draf Jurnal Magang Kamu:</b>\n\n${draft}\n\n<i>Silakan copy-paste ke portal MagangHub! 👍</i>`,
+          `📝 <b>Draf Jurnal Magang (Format Resmi):</b>\n\n${draft}\n\n<i>Silakan copy-paste ke portal MagangHub! 👍</i>`,
           senderChatId
         );
       }
@@ -276,15 +317,12 @@ async function main() {
     process.exit(0);
   } else {
     console.log(`🚀 Menjalankan mode: Polling Daemon + Interactive Telegram Bot...`);
-    console.log(`💡 Ketik /draft <kegiatan> di Telegram untuk tes AI generator kapanpun!`);
     await checkStatus();
 
-    // Loop pengecekan status API MagangHub
     setInterval(async () => {
       await checkStatus();
     }, CHECK_INTERVAL);
 
-    // Loop mendengarkan perintah Telegram
     setInterval(async () => {
       await pollTelegramCommands();
     }, 3000);

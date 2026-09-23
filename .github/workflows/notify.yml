@@ -1,9 +1,12 @@
-name: Check MagangHub Absensi Status
+name: Check MagangHub Absensi & Gajian Status
 
 on:
-  # Trigger berkala: Senin - Jumat, tiap 30 menit dari jam 08:00 s.d 18:00 WIB (01:00 - 11:00 UTC)
-  # Termasuk pengecekan tepat jam 15:00 WIB (08:00 UTC) untuk reminder belum isi jurnal
   schedule:
+    # 1. Alarm pagi jam 05:00 WIB (22:00 UTC) setiap hari untuk salam pagi & motivasi gajian
+    - cron: '0 22 * * *'
+
+    # 2. Trigger berkala jam kerja: Senin - Jumat, tiap 30 menit (08:00 - 18:00 WIB = 01:00 - 11:00 UTC)
+    # Termasuk pengingat jam 15:00 WIB (08:00 UTC) untuk laporan harian
     - cron: '*/30 1-11 * * 1-5'
 
   # Izinkan trigger manual dari tab 'Actions' di GitHub
@@ -38,8 +41,11 @@ jobs:
         env:
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
           PARTICIPANT_ID: ${{ secrets.PARTICIPANT_ID }}
+          SCHEDULE_ID: ${{ secrets.SCHEDULE_ID }}
+          PERIOD_START: ${{ secrets.PERIOD_START }}
           COOKIE: ${{ secrets.COOKIE }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node main.js --once

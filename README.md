@@ -1,6 +1,6 @@
-# 🔔 MagangHub Absensi & AI Jurnal Notification Bot
+# 🔔 MagangHub Absensi, Jurnal & Uang Saku Notification Bot
 
-Bot cerdas serba otomatis untuk memantau status persetujuan (*approval*) jurnal & absensi harian pada portal **MagangHub Kemnaker** (`monev-api.maganghub.kemnaker.go.id`), dilengkapi **Pengingat Jam 3 Sore**, **AI Jurnal Generator**, dan dukungan **Vercel Serverless Webhook 24/7**.
+Bot cerdas serba otomatis untuk memantau status persetujuan (*approval*) jurnal & absensi harian pada portal **MagangHub Kemnaker** (`monev-api.maganghub.kemnaker.go.id`), dilengkapi **Tracking Kesiapan Uang Saku / Gaji**, **Alarm Semangat Pagi Jam 5**, **Pengingat Jam 3 Sore**, **AI Jurnal Generator**, dan dukungan **Vercel Serverless Webhook 24/7**.
 
 ---
 
@@ -10,17 +10,27 @@ Bot cerdas serba otomatis untuk memantau status persetujuan (*approval*) jurnal 
    - Notifikasi instan ke Telegram saat jurnal & absensi kamu di-approve mentor.
    - Dilengkapi *state caching* anti-spam (hanya 1 notif per hari).
 
-2. **⏰ Reminder Jam 15:00 WIB (Jam 3 Sore)**:
+2. **💰 Tracking Uang Saku & Periode Klaim (`/gajian`)**:
+   - Memantau kesiapan pengajuan uang saku bulanan langsung dari endpoint resmi Kemnaker.
+   - Menampilkan status persyaratan (rekening bank & PKS), hitung mundur waktu pembukaan sistem pengajuan klaim, serta rincian kendala (*blockers*) bila ada absensi/jurnal yang belum disetujui.
+
+3. **🌅 Alarm Semangat Pagi (Jam 05:00 WIB)**:
+   - Setiap pagi pukul 05:00 WIB, bot menyapa dengan kata motivasi ceria & jenaka dari AI plus hitung mundur menuju tanggal pembukaan klaim uang saku.
+
+4. **⏰ Reminder Jam 15:00 WIB (Jam 3 Sore)**:
    - Setiap hari kerja (Senin–Jumat) pukul 15:00 WIB, bot otomatis memeriksa apakah kamu sudah mengisi jurnal/absensi hari ini.
-   - Jika belum ada catatan kehadiran/jurnal, bot akan mengingatkanmu di Telegram agar tidak terlewat sebelum jam kerja usai.
+   - Disertai tautan langsung ke portal dan tombol praktis agar tidak terlewat sebelum jam kerja usai.
 
-3. **🤖 AI Jurnal Generator (Interaktif 24/7 di Vercel)**:
-   - Chat langsung ke bot Telegram dari HP: `<b>/draft &lt;aktivitas kasar kamu&gt;</b>`
-   - Contoh: `/draft benerin bug auth login, integrasi webhook vercel, dan testing endpoint absensi`
-   - Bot otomatis meracik narasi laporan formal profesional berstandar Kemnaker (didukung **Google Gemini 2.5 Flash** & **OpenRouter**) yang siap kamu copy-paste ke portal!
+5. **🤖 AI Jurnal Generator (Interaktif 24/7 di Vercel)**:
+   - Chat langsung ke bot Telegram: `<b>/draft &lt;aktivitas kasar kamu&gt;</b>`
+   - Draf otomatis disusun dalam 3 format baku portal Kemnaker:
+     1. **Uraian Aktivitas**
+     2. **Pembelajaran yang Diperoleh**
+     3. **Kendala yang Dialami**
+   - Didukung **Google Gemini 2.5 Flash** (dengan fallback **OpenRouter**).
 
-4. **📊 Cek Status Kapan Saja**:
-   - Kirim `/status` di Telegram untuk melihat status kehadiran & approval hari ini secara instan langsung dari HP tanpa perlu membuka web Kemnaker.
+6. **📊 Cek Status & Rekap Kapan Saja**:
+   - Kirim `/status` atau `/rekap` di Telegram untuk melihat kehadiran, persetujuan mentor, dan progress bar magang secara instan.
 
 ---
 
@@ -31,17 +41,20 @@ Bot cerdas serba otomatis untuk memantau status persetujuan (*approval*) jurnal 
 - Cek ID akun Telegram kamu di [@userinfobot](https://t.me/userinfobot) untuk mendapatkan `TG_CHAT_ID`.
 - Klik **Start** pada bot kamu agar bot memiliki izin mengirimkan pesan.
 
-### 2. Bearer Token (`AUTH_TOKEN`), `PARTICIPANT_ID` & `COOKIE`
+### 2. Bearer Token (`AUTH_TOKEN`), `PARTICIPANT_ID`, `SCHEDULE_ID` & `COOKIE`
 - Buka browser dan login ke portal [monev.maganghub.kemnaker.go.id](https://monev.maganghub.kemnaker.go.id).
-- Tekan `F12` (Network Tab) > Buka menu **Riwayat / Absensi**.
-- Cari request `attendances?participant_id=...`:
-  - `PARTICIPANT_ID`: Nilai parameter `participant_id` dari URL request tersebut.
-  - `AUTH_TOKEN`: Token JWT dari header `Authorization` (setelah kata `Bearer `, diawali `eyJ...`).
-  - `COOKIE`: Nilai seluruh string pada baris header `Cookie` (termasuk `cf_clearance`, `acw_tc`, dan `monev_refresh_token`).
+- Tekan `F12` (Network Tab):
+  - Buka menu **Riwayat / Absensi** -> cari request `attendances?participant_id=...`:
+    - `PARTICIPANT_ID`: Nilai parameter `participant_id`.
+    - `AUTH_TOKEN`: Token JWT dari header `Authorization` (setelah kata `Bearer `, diawali `eyJ...`).
+    - `COOKIE`: Nilai seluruh string pada baris header `Cookie` (termasuk `monev_refresh_token`).
+  - Buka menu **Uang Saku / Klaim** -> cari request `payment/claims/readiness?...`:
+    - `SCHEDULE_ID`: Nilai parameter `schedule_id`.
+    - `PERIOD_START`: Nilai parameter `period_start` (contoh: `2026-09-21`).
 
 ### 3. AI Key (`GEMINI_API_KEY` / `OPENROUTER_API_KEY`)
 - **`GEMINI_API_KEY`** *(Recommended)*: Dapatkan gratis di [Google AI Studio](https://aistudio.google.com/app/apikey). Kuota 1.500 request/hari gratis tanpa antrean.
-- **`OPENROUTER_API_KEY`** *(Opsional)*: Dari [OpenRouter](https://openrouter.ai/keys) jika ingin menggunakan model alternatif seperti Llama atau Qwen.
+- **`OPENROUTER_API_KEY`** *(Opsional)*: Dari [OpenRouter](https://openrouter.ai/keys) jika ingin menggunakan model alternatif seperti Qwen atau Llama.
 
 ---
 
@@ -55,9 +68,11 @@ Dengan Vercel Serverless Webhook, bot Telegram kamu standby 24 jam di cloud dan 
 
 ### Langkah 2: Copy-Paste Environment Variables
 Di halaman konfigurasi project sebelum klik Deploy, buka bagian **Environment Variables**:
-- Kamu bisa langsung **copy seluruh isi file `.env` lokal kamu** dan **paste langsung** ke dalam kolom input Vercel. Vercel akan otomatis mengenali semua pasangan key dan value:
+- Kamu bisa langsung **copy seluruh isi file `.env` lokal kamu** dan **paste langsung** ke dalam kolom input Vercel:
   - `AUTH_TOKEN`
   - `PARTICIPANT_ID`
+  - `SCHEDULE_ID`
+  - `PERIOD_START`
   - `COOKIE`
   - `TG_TOKEN`
   - `TG_CHAT_ID`
@@ -76,11 +91,13 @@ Jika muncul pesan `✅ Webhook BERHASIL didaftarkan!`, bot kamu sudah resmi terh
 
 ## 🚀 Setup di GitHub Actions (Monitoring Berkala & Reminder)
 
-GitHub Actions bertugas memeriksa persetujuan jurnal secara berkala dan mengirimkan reminder jam 15:00 WIB tanpa server.
+GitHub Actions bertugas memeriksa persetujuan jurnal secara berkala, mengirim alarm semangat pagi jam 05:00 WIB, dan mengirim reminder jam 15:00 WIB tanpa server.
 
 1. Buka repo kamu di GitHub: **Settings** > **Secrets and variables** > **Actions**.
-2. Masukkan **Repository Secrets** yang sama (`AUTH_TOKEN`, `PARTICIPANT_ID`, `COOKIE`, `TG_TOKEN`, `TG_CHAT_ID`, `GEMINI_API_KEY`).
-3. Workflow otomatis berjalan setiap **30 menit** di jam kerja (Senin–Jumat 08:00 – 18:00 WIB), termasuk tepat jam **15:00 WIB** untuk reminder harian.
+2. Masukkan **Repository Secrets** yang sama (`AUTH_TOKEN`, `PARTICIPANT_ID`, `SCHEDULE_ID`, `PERIOD_START`, `COOKIE`, `TG_TOKEN`, `TG_CHAT_ID`, `GEMINI_API_KEY`).
+3. Workflow otomatis berjalan:
+   - Setiap pagi pukul **05:00 WIB** (alarm motivasi & countdown uang saku).
+   - Setiap **30 menit** di jam kerja (Senin–Jumat 08:00 – 18:00 WIB), termasuk tepat jam **15:00 WIB** untuk reminder harian.
 
 ---
 
@@ -106,8 +123,9 @@ pm2 start main.js --name "magang-bot"
 | Perintah | Deskripsi |
 | :--- | :--- |
 | **`/status`** | Mengecek status kehadiran dan status persetujuan mentor hari ini secara instan |
+| **`/gajian`** | Memeriksa kesiapan pengajuan uang saku, countdown jendela klaim, dan rincian blocker |
 | **`/rekap`** | Menampilkan dashboard statistik bulanan, progress bar magang, dan countdown sisa hari |
-| **`/draft <kegiatan>`** | Meracik catatan kerja kasar menjadi draf jurnal formal berstandar Kemnaker menggunakan AI |
+| **`/draft <kegiatan>`** | Meracik catatan kerja kasar menjadi draf jurnal formal berstandar Kemnaker (3 format seksi) menggunakan AI |
 | **`/help`** | Menampilkan panduan penggunaan bot |
 
 ---
@@ -115,3 +133,4 @@ pm2 start main.js --name "magang-bot"
 ## 🔒 Catatan Keamanan
 - File `.env` dan `.state.json` sudah terdaftar di `.gitignore` sehingga tidak akan pernah terunggah ke repositori publik.
 - Nilai token dan credential hanya disimpan secara aman di environment Vercel dan GitHub Encrypted Secrets.
+

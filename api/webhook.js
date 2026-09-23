@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { generateJournalDraft } from '../ai.js';
 import { getMonthlyRekap } from '../rekap.js';
+import { getGajianReadiness } from '../gajian.js';
 
 const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 const ALLOWED_CHAT_ID = process.env.TG_CHAT_ID;
@@ -18,12 +19,13 @@ function getTodayWIB() {
   return formatter.format(new Date());
 }
 
-async function sendTelegram(chatId, text) {
+async function sendTelegram(chatId, text, replyMarkup = null) {
   const tgUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   await axios.post(tgUrl, {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   });
 }
 
@@ -54,7 +56,6 @@ async function refreshAccessToken() {
       console.log('✅ Auto-refresh token BERHASIL!');
       currentAuthToken = newToken;
 
-      // Update cookie jika ada set-cookie baru
       const setCookies = res.headers['set-cookie'];
       if (setCookies && setCookies.length > 0) {
         currentCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
@@ -156,6 +157,24 @@ async function handleRekap() {
   }
 }
 
+async function handleGajian() {
+  try {
+    try {
+      return await getGajianReadiness(currentAuthToken, currentCookie);
+    } catch (firstErr) {
+      if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          return await getGajianReadiness(newToken, currentCookie);
+        }
+      }
+      throw firstErr;
+    }
+  } catch (err) {
+    return `❌ <b>Gagal memuat status gajian:</b> ${err.response?.data?.message || err.message}`;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     return res.status(200).json({ status: 'ok', service: 'MagangHub Bot Vercel Webhook' });
@@ -185,11 +204,12 @@ export default async function handler(req, res) {
     if (text.startsWith('/start') || text.startsWith('/help')) {
       await sendTelegram(
         senderChatId,
-        `👋 <b>Halo! Asisten Absensi & Jurnal MagangHub siap membantu 24/7 di Vercel.</b>\n\n` +
+        `👋 <b>Halo! Asisten Absensi, Jurnal & Gajian MagangHub siap membantu 24/7.</b>\n\n` +
         `Perintah yang tersedia:\n` +
         `• <code>/status</code> - Cek status kehadiran & persetujuan hari ini\n` +
         `• <code>/rekap</code> - Dashboard statistik bulanan, progress bar & countdown\n` +
-        `• <code>/draft &lt;kegiatan&gt;</code> - Generate narasi jurnal formal dengan AI\n` +
+        `• <code>/gajian</code> - Tracking kesiapan pengajuan uang saku & blocker mentor\n` +
+        `• <code>/draft &lt;kegiatan&gt;</code> - Generate narasi jurnal formal (3 bagian resmi)\n` +
         `• <code>/help</code> - Panduan bantuan`
       );
     } else if (text.startsWith('/status')) {
@@ -200,18 +220,32 @@ export default async function handler(req, res) {
       await sendTelegram(senderChatId, '📊 <i>Sedang mengkalkulasi rekapitulasi kehadiran dan progress magang...</i>');
       const rekapText = await handleRekap();
       await sendTelegram(senderChatId, rekapText);
+    } else if (text.startsWith('/gajian')) {
+      await sendTelegram(senderChatId, '💸 <i>Sedang memeriksa kesiapan pengajuan uang saku ke server Kemnaker...</i>');
+      const gajianText = await handleGajian();
+      const inlineButton = {
+        inline_keyboard: [
+          [
+            {
+              text: '🌐 Buka Portal Uang Saku MagangHub',
+              url: 'https://monev.maganghub.kemnaker.go.id/dashboard/stipend',
+            },
+          ],
+        ],
+      };
+      await sendTelegram(senderChatId, gajianText, inlineButton);
     } else if (text.startsWith('/draft')) {
       const rawContent = text.replace(/^\/draft\s*/i, '');
       await sendTelegram(senderChatId, '⏳ <i>Sedang meracik draf jurnal formal dengan Gemini AI...</i>');
       const draft = await generateJournalDraft(rawContent);
       await sendTelegram(
         senderChatId,
-        `📝 <b>Draf Jurnal Magang:</b>\n\n${draft}\n\n<i>Silakan copy-paste ke portal MagangHub! 👍</i>`
+        `📝 <b>Draf Jurnal Magang (Format Resmi):</b>\n\n${draft}\n\n<i>Silakan copy-paste ke portal MagangHub! 👍</i>`
       );
     } else {
       await sendTelegram(
         senderChatId,
-        'Perintah tidak dikenali. Ketik <code>/status</code> untuk cek absensi, <code>/rekap</code> untuk ringkasan bulanan, atau <code>/draft &lt;kegiatan&gt;</code> untuk buat draf jurnal.'
+        'Perintah tidak dikenali. Ketik <code>/status</code>, <code>/rekap</code>, <code>/gajian</code>, atau <code>/draft &lt;kegiatan&gt;</code>.'
       );
     }
   } catch (error) {
