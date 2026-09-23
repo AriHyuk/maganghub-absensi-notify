@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node main.js",
-    "check": "node main.js --once"
+    "check": "node main.js --once",
+    "set-webhook": "node scripts/set-webhook.js"
   },
   "keywords": [],
   "author": "",
