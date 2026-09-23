@@ -6,15 +6,21 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY?.trim();
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL?.trim() || 'qwen/qwen3.8-27b:free';
 
 const SYSTEM_PROMPT = `
-Kamu adalah asisten profesional yang bertugas membantu peserta MagangHub Kemnaker menulis jurnal harian/logbook kegiatan magang.
+Kamu adalah asisten profesional yang bertugas membantu peserta MagangHub Kemnaker menulis jurnal harian/logbook kegiatan magang sesuai formulir resmi portal MagangHub Kemnaker.
 
 Ubahlah catatan kegiatan kasar dari user menjadi deskripsi jurnal magang yang formal, terstruktur, profesional, dan menggunakan Bahasa Indonesia baku (EYD).
 Hindari kata-kata informal/slang, gunakan kata kerja operasional (seperti: Mengimplementasikan, Melakukan analisis, Menyusun, Mengidentifikasi, dsb).
 
-Format output yang diinginkan:
-1. Ringkasan Aktivitas (1-2 kalimat padat dan formal)
-2. Rincian Poin Kegiatan (3-4 butir poin kegiatan teknis/operasional)
-3. Hasil / Capaian (1 kalimat pencapaian hari ini)
+WAJIB ikuti format resmi 3 bagian berikut secara persis:
+
+1. Uraian Aktivitas
+(Jelaskan kegiatan teknis/operasional yang dikerjakan hari ini secara jelas, terstruktur dalam 2-4 poin ringkas)
+
+2. Pembelajaran yang Diperoleh
+(Jelaskan insight, keterampilan baru, pemahaman sistem, atau pelajaran kerja yang didapatkan dari aktivitas tersebut)
+
+3. Kendala yang Dialami
+(Jelaskan kendala teknis/tantangan yang dihadapi serta solusi penyelesaiannya. Jika dari catatan user tidak tampak kendala fatal, jelaskan tantangan kecil yang berhasil diatasi atau tuliskan bahwa kegiatan berjalan lancar dengan koordinasi tim yang baik).
 
 Output HANYA teks jurnal dalam format markdown bersih tanpa kata pembuka/penutup.
 `;
@@ -53,7 +59,7 @@ async function callOpenRouter(rawInput) {
         { role: 'user', content: `Catatan Kegiatan Kasar:\n"${rawInput}"` },
       ],
       temperature: 0.3,
-      max_tokens: 600,
+      max_tokens: 1000,
     },
     {
       headers: {
@@ -69,7 +75,10 @@ async function callOpenRouter(rawInput) {
 
 /**
  * Generate narasi jurnal formal MagangHub Kemnaker berdasarkan catatan kasar user.
- * Prioritas: Gemini 2.5 Flash -> OpenRouter -> Fallback Template
+ * Format Resmi:
+ * 1. Uraian Aktivitas
+ * 2. Pembelajaran yang Diperoleh
+ * 3. Kendala yang Dialami
  * @param {string} rawInput - Catatan kegiatan harian santai dari user
  * @returns {Promise<string>} - Hasil narasi jurnal formal siap copas
  */
@@ -78,10 +87,10 @@ export async function generateJournalDraft(rawInput) {
     return 'Silakan sertakan kegiatan kamu, contoh: <code>/draft benerin bug login dan riset api</code>';
   }
 
-  // 1. Prioritas Utama: Gemini 2.5 Flash (Sangat stabil, cepat, kuota besar)
+  // 1. Prioritas Utama: Gemini 2.5 Flash
   if (GEMINI_API_KEY) {
     try {
-      console.log(`🤖 Menghasilkan draf via Gemini Direct (${GEMINI_MODEL})...`);
+      console.log(`🤖 Menghasilkan draf resmi Kemnaker via Gemini (${GEMINI_MODEL})...`);
       const result = await callGemini(rawInput);
       if (result) return result;
     } catch (err) {
@@ -100,13 +109,16 @@ export async function generateJournalDraft(rawInput) {
     }
   }
 
-  // 3. Fallback jika kedua API offline
+  // 3. Fallback jika kedua API offline (Tetap sesuai format 3 bagian resmi)
   const capitalized = rawInput.charAt(0).toUpperCase() + rawInput.slice(1);
   return (
-    `📌 <b>Draf Jurnal Harian:</b>\n\n` +
-    `• Melakukan pelaksanaan dan penyelesaian tugas harian terkait: ${capitalized}.\n` +
-    `• Berkoordinasi dengan tim/mentor mengenai progres dan evaluasi hasil kerja.\n` +
-    `• Memastikan seluruh dokumentasi dan catatan teknis tercatat dengan baik.\n\n` +
-    `<i>(Dibuat dengan template otomatis bot).</i>`
+    `<b>1. Uraian Aktivitas</b>\n` +
+    `• Melaksanakan penyelesaian tugas teknis terkait: ${capitalized}.\n` +
+    `• Melakukan pengujian fungsional serta validasi data dari hasil pekerjaan.\n` +
+    `• Berkoordinasi dengan mentor dan tim terkait progres kegiatan hari ini.\n\n` +
+    `<b>2. Pembelajaran yang Diperoleh</b>\n` +
+    `• Memahami alur kerja implementasi sistem dan teknik pemecahan masalah secara lebih sistematis dan terstruktur.\n\n` +
+    `<b>3. Kendala yang Dialami</b>\n` +
+    `• Tidak ada kendala teknis yang signifikan; seluruh tugas dapat diselesaikan dengan baik melalui koordinasi aktif.`
   );
 }
