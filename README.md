@@ -1,67 +1,75 @@
-# 🔔 MagangHub Absensi / Jurnal Notification Bot
+# 🔔 MagangHub Absensi & AI Jurnal Notification Bot
 
-Bot otomatis untuk memantau status persetujuan (*approval*) jurnal & absensi harian pada portal **MagangHub Kemnaker** (`monev-api.maganghub.kemnaker.go.id`) dan mengirimkan notifikasi instan ke **Telegram** begitu jurnal kamu di-approve oleh mentor.
+Bot cerdas untuk memantau status persetujuan (*approval*) jurnal & absensi harian pada portal **MagangHub Kemnaker** (`monev-api.maganghub.kemnaker.go.id`), dilengkapi **Pengingat Jam 3 Sore** dan **AI Jurnal Generator**.
 
 ---
 
-## ✨ Fitur
+## ✨ Fitur Utama
 
-- ⚡ **Otomatis & 100% Gratis**: Berjalan terjadwal menggunakan **GitHub Actions** (tanpa perlu laptop/PC menyala).
-- 🎯 **Akurat**: Terhubung langsung ke API `/api/v1/attendances` dan membaca field `approval_status: "APPROVED"`.
-- 🛡️ **Anti-Spam**: Dilengkapi sistem *state caching* sehingga hanya mengirimkan 1 kali notifikasi saat jurnal hari tersebut berstatus `APPROVED`.
-- 🕒 **Timezone Aware**: Menggunakan waktu Indonesia Barat (`Asia/Jakarta` - WIB).
-- 🚨 **Token Expiry Alert**: Mengirim peringatan ke Telegram jika token autentikasi kamu sudah kedaluwarsa.
+1. **⚡ Approval Notification (Real-time)**:
+   - Notifikasi instan ke Telegram saat jurnal & absensi kamu di-approve mentor.
+   - Dilengkapi *state caching* anti-spam (hanya 1 notif per hari).
+
+2. **⏰ Reminder Jam 15:00 WIB (Jam 3 Sore)**:
+   - Setiap hari kerja (Senin–Jumat) pukul 15:00 WIB, bot memeriksa apakah kamu sudah mengisi jurnal/absensi hari ini.
+   - Jika belum ada catatan kehadiran/jurnal, bot akan mengingatkanmu di Telegram agar tidak terlewat sebelum jam kerja usai.
+
+3. **🤖 AI Jurnal Generator (Interaktif)**:
+   - Chat langsung ke bot Telegram: `<b>/draft &lt;aktivitas kasar kamu&gt;</b>`
+   - Contoh: `/draft tadi benerin bug auth, deploy backend, meeting sprint`
+   - Bot otomatis meracik narasi laporan formal profesional berstandar Kemnaker (didukung oleh Google Gemini AI) yang siap kamu copy-paste ke web!
+
+4. **📊 Cek Status Kapan Saja**:
+   - Kirim `/status` di Telegram untuk melihat status persetujuan hari ini secara instan dari HP.
 
 ---
 
 ## 🛠️ Persiapan Credentials
 
 ### 1. Telegram Bot Token (`TG_TOKEN`) & Chat ID (`TG_CHAT_ID`)
-1. Buka Telegram, cari [@BotFather](https://t.me/BotFather), ketik `/newbot`, lalu ikuti petunjuk untuk mendapatkan **Bot Token**.
-2. Cari [@userinfobot](https://t.me/userinfobot) di Telegram lalu ketik `/start` untuk melihat **Id** akun Telegram kamu.
-3. Buka bot yang baru kamu buat, lalu klik **Start** agar bot bisa mengirim pesan ke kamu.
+- Buat bot di [@BotFather](https://t.me/BotFather) untuk mendapatkan `TG_TOKEN`.
+- Cek ID akun Telegram kamu di [@userinfobot](https://t.me/userinfobot) untuk mendapatkan `TG_CHAT_ID`.
+- Klik **Start** pada bot kamu agar bot bisa mengirim pesan.
 
 ### 2. Bearer Token (`AUTH_TOKEN`) & Participant ID (`PARTICIPANT_ID`)
-1. Buka browser dan login ke portal [monev.maganghub.kemnaker.go.id](https://monev.maganghub.kemnaker.go.id).
-2. Tekan `F12` untuk membuka **Developer Tools** > pilih tab **Network**.
-3. Buka menu **Riwayat / Absensi**.
-4. Cari request bernama **`attendances?participant_id=...`**:
-   - **`PARTICIPANT_ID`**: Lihat nilai parameter `participant_id` pada URL request tersebut (contoh: `57aaeb80-9724-4ecd-a89e-e7ad2abbf8ca`).
-   - **`AUTH_TOKEN`**: Klik request tersebut, buka tab **Headers** > cari bagian **Request Headers** > temukan baris `Authorization`. Salin token JWT setelah kata `Bearer ` (yang diawali `eyJ...`).
-   - *(Opsional)* **`COOKIE`**: Salin seluruh string di baris header `Cookie`.
+- Buka browser dan login ke portal [monev.maganghub.kemnaker.go.id](https://monev.maganghub.kemnaker.go.id).
+- Tekan `F12` (Network Tab) > Buka menu Riwayat/Absensi.
+- Cari request `attendances?participant_id=...`:
+  - `PARTICIPANT_ID`: ID peserta dari URL parameter.
+  - `AUTH_TOKEN`: Token JWT dari header `Authorization` (setelah kata `Bearer `).
+
+### 3. Google Gemini API Key (`GEMINI_API_KEY`) *(Opsional tapi Recommended)*
+- Dapatkan API key gratis di [Google AI Studio](https://aistudio.google.com/app/apikey).
+- Digunakan untuk fitur peracik narasi jurnal otomatis `/draft`. (Jika tidak diisi, bot tetap menyediakan template formal bawaan).
 
 ---
 
-## 🚀 Setup di GitHub Actions (Recommended)
+## 🚀 Setup di GitHub Actions (Cloud & Gratis)
 
-1. Buka repositori kamu di GitHub.
-2. Buka tab **Settings** > **Secrets and variables** > **Actions**.
-3. Tambahkan Repository Secrets berikut:
-   - `AUTH_TOKEN` : Token JWT dari header Authorization
-   - `PARTICIPANT_ID` : ID peserta kamu
-   - `TG_TOKEN` : Token bot Telegram dari @BotFather
-   - `TG_CHAT_ID` : ID chat Telegram kamu
-   - `COOKIE` *(opsional)* : Cookie browser jika diperlukan
-4. Masuk ke tab **Actions** di GitHub > pilih workflow **Check MagangHub Absensi Status** > klik **Run workflow** untuk uji coba.
-
-> ℹ️ **Jadwal Otomatis:** Workflow berjalan otomatis setiap **30 menit** pada hari kerja (**Senin – Jumat**) antara pukul **08:00 – 18:00 WIB**.
+1. Buka repo kamu di GitHub: **Settings** > **Secrets and variables** > **Actions**.
+2. Masukkan Secrets:
+   - `AUTH_TOKEN`
+   - `PARTICIPANT_ID`
+   - `TG_TOKEN`
+   - `TG_CHAT_ID`
+   - `GEMINI_API_KEY` *(opsional)*
+   - `COOKIE` *(opsional)*
+3. Workflow berjalan otomatis setiap **30 menit** di hari kerja (08:00 – 18:00 WIB), termasuk tepat jam **15:00 WIB** untuk reminder harian.
 
 ---
 
-## 💻 Menjalankan di Komputer Lokal
+## 💻 Menjalankan di Komputer Lokal (Interactive Daemon)
 
-1. Salin `.env.example` ke `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Isi nilai credentials di file `.env`.
-3. Jalankan sekali pengecekan:
-   ```bash
-   npm run check
-   ```
-4. Atau jalankan terus-menerus di background:
-   ```bash
-   npm start
-   # atau via PM2:
-   pm2 start main.js --name "magang-notify"
-   ```
+Jika kamu menjalankan bot di komputer lokal, bot akan aktif mendengarkan perintah chat Telegram kamu:
+
+```bash
+# 1. Jalankan bot
+npm start
+
+# 2. Atau jalankan di background terminal dengan PM2
+pm2 start main.js --name "magang-bot"
+```
+
+Buka Telegram kamu dan coba kirim:
+- `/status`
+- `/draft riset api kemnaker dan integrasi telegram bot`
