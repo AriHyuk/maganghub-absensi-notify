@@ -57,7 +57,7 @@ function saveState(state) {
   try {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
   } catch (err) {
-    console.error('⚠️ Gagal menyimpan state ke file:', err.message);
+    console.error('❌ Gagal menyimpan state ke file:', err.message);
   }
 }
 
@@ -69,6 +69,45 @@ async function sendTelegramNotification(text, targetChatId = CHAT_ID, replyMarku
     parse_mode: 'HTML',
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   });
+}
+
+/**
+ * Mencoba merefresh access token ke Kemnaker menggunakan session cookie aktif
+ */
+async function refreshAccessToken(currentCookie) {
+  if (!currentCookie) return null;
+  console.log('🔄 Mencoba auto-refresh access token ke MagangHub...');
+  try {
+    const res = await axios.post(
+      'https://monev-api.maganghub.kemnaker.go.id/api/v1/auth/refresh',
+      null,
+      {
+        headers: {
+          Cookie: currentCookie,
+          Origin: 'https://monev.maganghub.kemnaker.go.id',
+          Referer: 'https://monev.maganghub.kemnaker.go.id/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const newToken = res.data?.access_token || res.data?.token || res.data?.data?.token;
+    if (newToken) {
+      console.log('✅ Auto-refresh token BERHASIL!');
+      let newCookie = currentCookie;
+      const setCookies = res.headers['set-cookie'];
+      if (setCookies && setCookies.length > 0) {
+        newCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+      }
+
+      await saveSession({ token: newToken, cookie: newCookie });
+      return { token: newToken, cookie: newCookie };
+    }
+  } catch (err) {
+    console.error('❌ Auto-refresh gagal:', err.response?.data?.message || err.message);
+  }
+  return null;
 }
 
 // Cek status ke API MagangHub
@@ -94,9 +133,9 @@ async function checkStatus(date) {
   if (targetDate === '2026-10-20' && currentHour >= 16 && !state.submissionOpenAlertSent) {
     console.log('🚨 Jendela pengajuan uang saku resmi dibuka! Mengirim notifikasi darurat...');
     await sendTelegramNotification(
-      `🚨 <b>PERHATIAN: JENDELA PENGAJUAN UANG SAKU RESMI DIBUKA!</b> 💸\n\n` +
+      `🚨 <b>PERHATIAN: JENDELA PENGAJUAN UANG SAKU RESMI DIBUKA!</b> 🚨\n\n` +
       `Periode pengajuan uang saku bulan ini telah dibuka mulai <b>pukul 16:00 WIB hari ini</b>.\n` +
-      `⚠️ <b>Batas Akhir:</b> 22 Oktober 2026 pukul 23:59 WIB (HANYA 2 HARI!).\n\n` +
+      `⏰ <b>Batas Akhir:</b> 22 Oktober 2026 pukul 23:59 WIB (HANYA 2 HARI!).\n\n` +
       `Segera hubungi dan ingatkan <b>Mentor</b> kamu untuk mengklik tombol <b>Ajukan Pembayaran</b> di portal MagangHub sekarang juga!`,
       CHAT_ID,
       {
@@ -109,10 +148,14 @@ async function checkStatus(date) {
     saveState(state);
   }
 
-  const session = await getSession();
-  const currentToken = session.token || AUTH_TOKEN;
-  const currentCookie = session.cookie || COOKIE;
-  const bearerHeader = currentToken.startsWith('Bearer ') ? currentToken : `Bearer ${currentToken}`;
+  let session = await getSession();
+  let currentToken = session.token || AUTH_TOKEN;
+  let currentCookie = session.cookie || COOKIE;
+
+  if (!currentToken) {
+    console.error('❌ Tidak ada token yang tersedia di Database maupun .env!');
+    return;
+  }
 
   // Rentang query: minta dari 7 hari lalu s.d hari ini
   const [year, month, day] = targetDate.split('-').map(Number);
@@ -122,20 +165,42 @@ async function checkStatus(date) {
 
   const url = `https://monev-api.maganghub.kemnaker.go.id/api/v1/attendances?participant_id=${PARTICIPANT_ID}&start_date=${startDate}&end_date=${endDate}`;
 
-  try {
-    const res = await axios.get(url, {
+  const doFetch = async (tok, cook) => {
+    const bearerHeader = tok.startsWith('Bearer ') ? tok : `Bearer ${tok}`;
+    return await axios.get(url, {
       headers: {
         Authorization: bearerHeader,
-        ...(currentCookie ? { Cookie: currentCookie } : {}),
+        ...(cook ? { Cookie: cook } : {}),
         Origin: 'https://monev.maganghub.kemnaker.go.id',
         Referer: 'https://monev.maganghub.kemnaker.go.id/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
       timeout: 15000,
     });
+  };
+
+  try {
+    let res;
+    try {
+      res = await doFetch(currentToken, currentCookie);
+    } catch (firstErr) {
+      if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
+        console.log('⚠️ Token expired (401), mencoba auto-refresh...');
+        const refreshed = await refreshAccessToken(currentCookie);
+        if (refreshed) {
+          currentToken = refreshed.token;
+          currentCookie = refreshed.cookie;
+          res = await doFetch(currentToken, currentCookie);
+        } else {
+          throw firstErr;
+        }
+      } else {
+        throw firstErr;
+      }
+    }
 
     const items = res.data?.data || [];
-    console.log(`📦 Ditemukan ${items.length} riwayat absensi dalam rentang ${startDate} s/d ${endDate}.`);
+    console.log(`📊 Ditemukan ${items.length} riwayat absensi dalam rentang ${startDate} s/d ${endDate}.`);
 
     const todayRecord = items.find((item) => item.date === targetDate);
 
@@ -144,11 +209,11 @@ async function checkStatus(date) {
       console.log(`⚠️ Belum ada catatan absensi untuk tanggal ${targetDate}.`);
       
       if (isWeekdayWIB() && currentHour >= 15 && currentHour < 18 && state.reminderDate !== targetDate) {
-        console.log('⏰ Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder Telegram...');
+        console.log('📢 Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder Telegram...');
         const reminderText =
-          `⚠️ <b>Last call — isi laporan harian sebelum jam 4, jangan ketinggalan!</b>\n` +
+          `🚨 <b>Last call - isi laporan harian sebelum jam 4, jangan ketinggalan!</b>\n` +
           `📅 Tanggal: <code>${targetDate}</code>\n\n` +
-          `🔗 <b>Langsung isi di sini:</b>\n` +
+          `👉 <b>Langsung isi di sini:</b>\n` +
           `https://monev.maganghub.kemnaker.go.id/dashboard/riwayat\n\n` +
           `💡 <i>Males mikir kata-katanya? Ketik aja:</i>\n` +
           `<code>/draft &lt;apa yang lo kerjain hari ini&gt;</code>\n` +
@@ -173,7 +238,7 @@ async function checkStatus(date) {
     }
 
     const { status, approval_status, reviewed_at } = todayRecord;
-    console.log(`📊 Status kehadiran: ${status} | Approval: ${approval_status}`);
+    console.log(`📋 Status kehadiran: ${status} | Approval: ${approval_status}`);
 
     // NOTIFIKASI APPROVAL MENTOR
     if (approval_status === 'APPROVED' && (!state.notified || state.date !== targetDate)) {
@@ -186,10 +251,10 @@ async function checkStatus(date) {
       await sendTelegramNotification(
         `✅ <b>Jurnal & Absensi Disetujui!</b>\n\n` +
         `📅 <b>Tanggal:</b> <code>${targetDate}</code>\n` +
-        `📌 <b>Kehadiran:</b> ${status}\n` +
-        `⭐ <b>Status Approval:</b> <b>APPROVED</b>\n` +
-        `⏰ <b>Waktu Review:</b> ${formattedReviewTime}\n\n` +
-        `<i>Mantap, jurnal kamu sudah di-acc mentor! 👍</i>`
+        `🕒 <b>Kehadiran:</b> ${status}\n` +
+        `✨ <b>Status Approval:</b> <b>APPROVED</b>\n` +
+        `👤 <b>Waktu Review:</b> ${formattedReviewTime}\n\n` +
+        `<i>Mantap, jurnal kamu sudah di-acc mentor! 🎉</i>`
       );
       console.log('✅ Notifikasi Telegram sukses terkirim.');
 
@@ -203,7 +268,7 @@ async function checkStatus(date) {
       state.updatedAt = new Date().toISOString();
       saveState(state);
     } else {
-      console.log(`⏳ Status saat ini: ${approval_status || 'PENDING'}.`);
+      console.log(`ℹ️ Status saat ini: ${approval_status || 'PENDING'}.`);
       state.date = targetDate;
       state.attendanceId = todayRecord.id;
       state.status = status;
@@ -219,7 +284,7 @@ async function checkStatus(date) {
         if (!state.tokenExpiredWarned) {
           try {
             await sendTelegramNotification(
-              `⚠️ <b>Peringatan Bot Absensi:</b>\nToken MagangHub kamu sudah expired (401 Unauthorized).\nSilakan update <code>AUTH_TOKEN</code> di GitHub Secrets / .env!`
+              `⚠️ <b>Peringatan Bot Absensi:</b>\nToken MagangHub kamu sudah expired (401 Unauthorized).\nSilakan sync ulang sesi dari browser kamu!`
             );
             state.tokenExpiredWarned = true;
             saveState(state);
@@ -252,69 +317,103 @@ async function pollTelegramCommands() {
 
       if (text.startsWith('/start') || text.startsWith('/help')) {
         await sendTelegramNotification(
-          `👋 <b>Halo! Asisten Absensi, Jurnal & Gajian MagangHub siap membantu.</b>\n\n` +
+          `🤖 <b>Halo! Asisten Absensi, Jurnal & Gajian MagangHub siap membantu.</b>\n\n` +
           `Perintah yang tersedia:\n` +
-          `• <code>/status</code> - Cek status absensi hari ini\n` +
-          `• <code>/rekap</code> - Dashboard statistik bulanan, progress bar & countdown\n` +
-          `• <code>/gajian</code> - Tracking kesiapan pengajuan uang saku & blocker mentor\n` +
-          `• <code>/draft &lt;kegiatan&gt;</code> - Generate teks jurnal formal 3 bagian resmi\n` +
-          `• <code>/help</code> - Menampilkan bantuan ini`,
+          `  <code>/status</code> - Cek status absensi hari ini\n` +
+          `  <code>/rekap</code> - Dashboard statistik bulanan, progress bar & countdown\n` +
+          `  <code>/gajian</code> - Tracking kesiapan pengajuan uang saku & blocker mentor\n` +
+          `  <code>/draft &lt;kegiatan&gt;</code> - Generate teks jurnal formal 3 bagian resmi\n` +
+          `  <code>/help</code> - Menampilkan bantuan ini`,
           senderChatId
         );
       } else if (text.startsWith('/status')) {
         const state = loadState();
         const targetDate = getTodayWIB();
         await sendTelegramNotification(
-          `📊 <b>Status Terakhir Absensi:</b>\n\n` +
+          `📋 <b>Status Terakhir Absensi:</b>\n\n` +
           `📅 Tanggal: <code>${state.date || targetDate}</code>\n` +
-          `📌 Status Approval: <b>${state.approval_status || 'Belum ada data'}</b>\n` +
+          `✨ Status Approval: <b>${state.approval_status || 'Belum ada data'}</b>\n` +
           `🕒 Terakhir dicek: ${state.updatedAt ? new Date(state.updatedAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : '-'}`,
           senderChatId
         );
       } else if (text.startsWith('/rekap')) {
-        await sendTelegramNotification('📊 <i>Sedang mengkalkulasi rekapitulasi kehadiran...</i>', senderChatId);
+        await sendTelegramNotification('⏳ <i>Sedang mengkalkulasi rekapitulasi kehadiran...</i>', senderChatId);
+        const session = await getSession();
+        let tok = session.token || AUTH_TOKEN;
+        let cook = session.cookie || COOKIE;
         try {
-          const rekapText = await getMonthlyRekap(AUTH_TOKEN, COOKIE);
-          await sendTelegramNotification(rekapText, senderChatId);
+          try {
+            const rekapText = await getMonthlyRekap(tok, cook);
+            await sendTelegramNotification(rekapText, senderChatId);
+          } catch (firstErr) {
+            if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
+              const refreshed = await refreshAccessToken(cook);
+              if (refreshed) {
+                const rekapText = await getMonthlyRekap(refreshed.token, refreshed.cookie);
+                await sendTelegramNotification(rekapText, senderChatId);
+                return;
+              }
+            }
+            throw firstErr;
+          }
         } catch (e) {
-          await sendTelegramNotification(`❌ Gagal memuat rekap: ${e.message}`, senderChatId);
+          await sendTelegramNotification(`❌ Gagal memuat rekap: ${e.response?.data?.message || e.message}`, senderChatId);
         }
       } else if (text.startsWith('/gajian')) {
-        await sendTelegramNotification('💸 <i>Sedang memeriksa kesiapan pengajuan uang saku ke Kemnaker...</i>', senderChatId);
+        await sendTelegramNotification('⏳ <i>Sedang memeriksa kesiapan pengajuan uang saku ke Kemnaker...</i>', senderChatId);
+        const session = await getSession();
+        let tok = session.token || AUTH_TOKEN;
+        let cook = session.cookie || COOKIE;
         try {
-          const gajianText = await getGajianReadiness(AUTH_TOKEN, COOKIE);
-          await sendTelegramNotification(gajianText, senderChatId, {
-            inline_keyboard: [
-              [{ text: '🌐 Buka Portal Uang Saku', url: 'https://monev.maganghub.kemnaker.go.id/dashboard/stipend' }],
-            ],
-          });
+          try {
+            const gajianText = await getGajianReadiness(tok, cook);
+            await sendTelegramNotification(gajianText, senderChatId, {
+              inline_keyboard: [
+                [{ text: '🌐 Buka Portal Uang Saku', url: 'https://monev.maganghub.kemnaker.go.id/dashboard/stipend' }],
+              ],
+            });
+          } catch (firstErr) {
+            if (firstErr.response?.status === 401 || firstErr.response?.status === 403) {
+              const refreshed = await refreshAccessToken(cook);
+              if (refreshed) {
+                const gajianText = await getGajianReadiness(refreshed.token, refreshed.cookie);
+                await sendTelegramNotification(gajianText, senderChatId, {
+                  inline_keyboard: [
+                    [{ text: '🌐 Buka Portal Uang Saku', url: 'https://monev.maganghub.kemnaker.go.id/dashboard/stipend' }],
+                  ],
+                });
+                return;
+              }
+            }
+            throw firstErr;
+          }
         } catch (e) {
-          await sendTelegramNotification(`❌ Gagal memuat status gajian: ${e.message}`, senderChatId);
+          await sendTelegramNotification(`❌ Gagal memuat status gajian: ${e.response?.data?.message || e.message}`, senderChatId);
         }
       } else if (text.startsWith('/token') || (text.startsWith('eyJ') && text.length > 100)) {
         const rawToken = text.replace(/^\/token\s*/i, '').trim();
         if (rawToken) {
           await saveSession({ token: rawToken });
           await sendTelegramNotification(
-            '✅ <b>Token Berhasil Diperbarui!</b> 🎉\n\n' +
-            'Sesi MagangHub kamu sekarang aktif dan tersimpan ke .env / .state.json. Silakan cek dengan <code>/status</code> atau <code>/gajian</code>.',
+            '✅ <b>Token Berhasil Diperbarui!</b> 🚀\n\n' +
+            'Sesi MagangHub kamu sekarang aktif dan tersimpan ke Database KV & .env. Silakan cek dengan <code>/status</code> atau <code>/gajian</code>.',
             senderChatId
           );
         }
       } else if (text.startsWith('/sync')) {
         await sendTelegramNotification(
-          `⚡ <b>Sinkronisasi 1-Klik dari Browser:</b>\n\n` +
+          `🔗 <b>Sinkronisasi 1-Klik dari Browser:</b>\n\n` +
           `Gak perlu lagi buka Vercel! Cukup pasang bookmarklet 1-klik di browser kamu:\n` +
-          `🌐 Buka: https://maganghub-absensi-notify.vercel.app\n\n` +
-          `Tarik tombol <b>🚀 Sync MagangHub Bot</b> ke Bookmark Bar browsermu. Setiap kali buka web Kemnaker, cukup klik tombol itu sekali!`,
+          `👉 Buka: https://maganghub-absensi-notify.vercel.app\n\n` +
+          `Tarik tombol <b>🔗 Sync MagangHub Bot</b> ke Bookmark Bar browsermu. Setiap kali buka web Kemnaker, cukup klik tombol itu sekali!`,
           senderChatId
         );
       } else if (text.startsWith('/draft')) {
         const rawContent = text.replace(/^\/draft\s*/i, '');
-        await sendTelegramNotification('⏳ <i>Sedang meracik draf jurnal formal untukmu...</i>', senderChatId);
+        await sendTelegramNotification('✍️ <i>Sedang meracik draf jurnal formal untukmu...</i>', senderChatId);
         const draft = await generateJournalDraft(rawContent);
         await sendTelegramNotification(
-          `📝 <b>Draf Jurnal Magang (Format Resmi):</b>\n\n${draft}\n\n<i>Silakan copy-paste ke portal MagangHub! 👍</i>`,
+          `📝 <b>Draf Jurnal Magang (Format Resmi):</b>\n\n${draft}\n\n<i>Silakan copy-paste ke portal MagangHub! 🚀</i>`,
           senderChatId
         );
       }
@@ -325,8 +424,11 @@ async function pollTelegramCommands() {
 }
 
 async function main() {
-  if (!AUTH_TOKEN || !PARTICIPANT_ID || !TELEGRAM_TOKEN || !CHAT_ID) {
-    console.error('❌ Harap lengkapi AUTH_TOKEN, PARTICIPANT_ID, TG_TOKEN, dan TG_CHAT_ID di .env atau GitHub Secrets!');
+  const session = await getSession();
+  const activeToken = session.token || AUTH_TOKEN;
+
+  if (!activeToken || !PARTICIPANT_ID || !TELEGRAM_TOKEN || !CHAT_ID) {
+    console.error('❌ Harap lengkapi AUTH_TOKEN / Database Session, PARTICIPANT_ID, TG_TOKEN, dan TG_CHAT_ID!');
     process.exit(1);
   }
 
@@ -335,10 +437,10 @@ async function main() {
   if (isRunOnce) {
     console.log('🚀 Menjalankan mode: Single Run...');
     await checkStatus();
-    console.log('🏁 Selesai.');
+    console.log('✅ Selesai.');
     process.exit(0);
   } else {
-    console.log(`🚀 Menjalankan mode: Polling Daemon + Interactive Telegram Bot...`);
+    console.log(`🤖 Menjalankan mode: Polling Daemon + Interactive Telegram Bot...`);
     await checkStatus();
 
     setInterval(async () => {
