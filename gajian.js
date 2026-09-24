@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { calculateInternshipProgress } from './rekap.js';
 
 const PARTICIPANT_ID = process.env.PARTICIPANT_ID || '57aaeb80-9724-4ecd-a89e-e7ad2abbf8ca';
 const SCHEDULE_ID = process.env.SCHEDULE_ID || '19273eb6-983a-4b47-bb6e-6ff4c183c8b1';
@@ -45,7 +46,7 @@ export async function getGajianReadiness(token, cookie) {
   let countdownText = '';
   if (isOpen) {
     const diffHours = Math.max(0, Math.ceil((closesAt - now) / (1000 * 60 * 60)));
-    countdownText = `🔥 <b>JENDELA SEDANG DIBUKA!</b> Sisa <b>${diffHours} jam lagi</b> sebelum ditutup!`;
+    countdownText = `🚨 <b>JENDELA SEDANG DIBUKA!</b> Sisa <b>${diffHours} jam lagi</b> sebelum ditutup!`;
   } else if (now < opensAt) {
     const diffDays = Math.ceil((opensAt - now) / (1000 * 60 * 60 * 24));
     countdownText = `⏳ <b>H-${diffDays}</b> menuju pembukaan pengajuan uang saku!`;
@@ -53,9 +54,16 @@ export async function getGajianReadiness(token, cookie) {
     countdownText = `🔒 Periode pengajuan telah ditutup.`;
   }
 
+  const progress = calculateInternshipProgress();
+
   return (
+    `👤 <b>${progress.name}</b> — <code>${progress.role}</code>\n` +
+    `🏢 <i>${progress.agency}</i>\n` +
+    `🎯 <b>HARI KE-${progress.currentDay} DARI ${progress.totalDays}</b> (Sisa ${progress.remainingDays} hari · ${progress.batch})\n` +
+    `📈 Progress: ${progress.progressBar}\n\n` +
     `💸 <b>STATUS PENGAJUAN UANG SAKU MAGANG</b>\n` +
-    `• Status: ${countdownText}\n\n` +
+    `📅 Periode: 21 September – 20 Oktober 2026\n` +
+    `📊 Status Klaim: ${countdownText}\n\n` +
     `<i>💡 Catatan: Yang berhak mengklik tombol "Ajukan Pembayaran" adalah <b>Mentor</b> kamu. Pastikan ingatkan mentor saat jendela dibuka ya!</i>`
   );
 }

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { generateJournalDraft } from '../ai.js';
-import { getMonthlyRekap } from '../rekap.js';
+import { getMonthlyRekap, calculateInternshipProgress } from '../rekap.js';
 import { getGajianReadiness } from '../gajian.js';
 import { getSession, saveSession } from '../sessionStore.js';
 
@@ -313,3 +313,4 @@ export default async function handler(req, res) {
 
   return res.status(200).json({ ok: true });
 }
+

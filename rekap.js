@@ -1,10 +1,14 @@
 import axios from 'axios';
 
-const PARTICIPANT_ID = process.env.PARTICIPANT_ID;
-const TOTAL_MAGANG_DAYS = parseInt(process.env.MAGANG_TOTAL_DAYS || '120', 10);
-const MAGANG_END_DATE = process.env.MAGANG_END_DATE?.trim(); // Format: YYYY-MM-DD (opsional)
+const PARTICIPANT_ID = process.env.PARTICIPANT_ID || '57aaeb80-9724-4ecd-a89e-e7ad2abbf8ca';
+const PERIOD_START = process.env.PERIOD_START || '2026-09-21';
+const TOTAL_MAGANG_DAYS = parseInt(process.env.MAGANG_TOTAL_DAYS || '181', 10);
+const BATCH_NAME = process.env.MAGANG_BATCH || 'Batch 2 Tahun 2026';
+const PARTICIPANT_NAME = process.env.PARTICIPANT_NAME || 'Ari Awaludin';
+const PARTICIPANT_ROLE = process.env.PARTICIPANT_ROLE || 'Programmer';
+const PARTICIPANT_AGENCY = process.env.PARTICIPANT_AGENCY || 'Pusat Pengembangan Sumber Daya Manusia Standardisasi dan Penilaian Kesesuaian';
 
-function getTodayWIB() {
+export function getTodayWIB() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jakarta',
     year: 'numeric',
@@ -17,16 +21,43 @@ function getTodayWIB() {
 function getMonthNameID(monthIndex) {
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
   ];
   return months[monthIndex];
 }
 
-function makeProgressBar(current, total, length = 10) {
+export function makeProgressBar(current, total, length = 10) {
   const percent = Math.min(100, Math.max(0, Math.round((current / total) * 100)));
-  const filledLength = Math.round((length * percent) / 100);
+  const filledLength = Math.max(percent > 0 ? 1 : 0, Math.round((length * percent) / 100));
   const bar = '█'.repeat(filledLength) + '░'.repeat(length - filledLength);
-  return `<code>[${bar}]</code> <b>${percent}%</b> (${current}/${total} Hari)`;
+  return `<code>[${bar}]</code> <b>${percent}%</b>`;
+}
+
+/**
+ * Hitung kalkulasi hari & progress magang sesuai portal MagangHub
+ */
+export function calculateInternshipProgress(dateStr) {
+  const today = dateStr || getTodayWIB();
+  const start = new Date(PERIOD_START + 'T00:00:00+07:00');
+  const now = new Date(today + 'T00:00:00+07:00');
+  const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  const currentDay = Math.max(1, diffDays + 1);
+  const remainingDays = Math.max(0, TOTAL_MAGANG_DAYS - currentDay);
+  const percent = Math.min(100, Math.max(0, Math.round((currentDay / TOTAL_MAGANG_DAYS) * 100)));
+  const progressBar = makeProgressBar(currentDay, TOTAL_MAGANG_DAYS);
+
+  return {
+    today,
+    currentDay,
+    totalDays: TOTAL_MAGANG_DAYS,
+    remainingDays,
+    percent,
+    progressBar,
+    batch: BATCH_NAME,
+    name: PARTICIPANT_NAME,
+    role: PARTICIPANT_ROLE,
+    agency: PARTICIPANT_AGENCY,
+  };
 }
 
 /**
@@ -34,13 +65,10 @@ function makeProgressBar(current, total, length = 10) {
  */
 export async function getMonthlyRekap(token, cookie) {
   const today = getTodayWIB();
-  const [year, month, day] = today.split('-').map(Number);
-
-  // Ambil tanggal awal bulan ini (misal 2026-09-01)
+  const [year, month] = today.split('-').map(Number);
   const monthStr = String(month).padStart(2, '0');
   const startDate = `${year}-${monthStr}-01`;
 
-  // Ambil tanggal akhir bulan ini
   const lastDay = new Date(year, month, 0).getDate();
   const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
@@ -60,7 +88,6 @@ export async function getMonthlyRekap(token, cookie) {
 
   const items = res.data?.data || [];
 
-  // Hitung status kehadiran
   let presentCount = 0;
   let otherCount = 0;
   let approvedCount = 0;
@@ -76,41 +103,24 @@ export async function getMonthlyRekap(token, cookie) {
     else if (item.approval_status === 'REJECTED') rejectedCount++;
   }
 
-  // Hitung sisa hari menuju selesai jika MAGANG_END_DATE ada
-  let countdownText = '';
-  if (MAGANG_END_DATE) {
-    const end = new Date(MAGANG_END_DATE);
-    const now = new Date(today);
-    const diffTime = end - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays > 0) {
-      countdownText = `⏳ <b>Sisa ${diffDays} hari lagi menuju selesai magang!</b> 🎓\n`;
-    } else if (diffDays === 0) {
-      countdownText = `🎉 <b>HARI INI ADALAH HARI TERAKHIR MAGANG KAMU!</b> 🥳\n`;
-    } else {
-      countdownText = `🎓 <i>Periode magang sudah selesai!</i>\n`;
-    }
-  } else {
-    const remainingDays = Math.max(0, TOTAL_MAGANG_DAYS - items.length);
-    countdownText = `⏳ <b>Estimasi sisa ${remainingDays} hari kerja menuju target!</b> 🎓\n`;
-  }
-
-  const progressBar = makeProgressBar(items.length, TOTAL_MAGANG_DAYS);
+  const progress = calculateInternshipProgress(today);
   const currentMonthName = getMonthNameID(month - 1);
 
   return (
-    `📊 <b>REKAP ABSENSI & JURNAL MAGANGHUB</b>\n` +
-    `🗓️ <i>Periode: ${currentMonthName} ${year}</i>\n\n` +
-    `📈 <b>Statistik Kehadiran Bulan Ini:</b>\n` +
-    `• Hadir (PRESENT): <b>${presentCount} Hari</b>\n` +
-    (otherCount > 0 ? `• Izin / Sakit: <b>${otherCount} Hari</b>\n` : '') +
-    `• Total Absen Tercatat: <b>${items.length} Hari</b>\n\n` +
-    `⭐ <b>Status Approval Mentor:</b>\n` +
-    `• ✅ APPROVED: <b>${approvedCount}</b>\n` +
-    `• ⏳ SUBMITTED (Pending): <b>${submittedCount}</b>\n` +
-    (rejectedCount > 0 ? `• ❌ REJECTED: <b>${rejectedCount}</b>\n` : '') +
-    `\n🎯 <b>Progress Keseluruhan Magang:</b>\n` +
-    `${progressBar}\n\n` +
-    `${countdownText}`
+    `📊 <b>REKAP MAGANG & KEHADIRAN</b>\n` +
+    `👤 <b>${progress.name}</b> — <code>${progress.role}</code>\n` +
+    `🏢 <i>${progress.agency}</i>\n\n` +
+    `🎯 <b>HARI KE-${progress.currentDay} DARI ${progress.totalDays}</b>\n` +
+    `⏳ <b>Sisa ${progress.remainingDays} hari · ${progress.batch}</b>\n` +
+    `📈 Progress: ${progress.progressBar}\n\n` +
+    `🗓️ <b>Statistik Bulan Ini (${currentMonthName} ${year}):</b>\n` +
+    `  ✅ Hadir (PRESENT): <b>${presentCount} Hari</b>\n` +
+    (otherCount > 0 ? `  ℹ️ Izin / Sakit: <b>${otherCount} Hari</b>\n` : '') +
+    `  📋 Total Hari Kerja Tercatat: <b>${items.length} Hari</b>\n\n` +
+    `📝 <b>Status Approval Mentor:</b>\n` +
+    `  ✅ APPROVED: <b>${approvedCount}</b>\n` +
+    `  ⏳ SUBMITTED (Pending): <b>${submittedCount}</b>\n` +
+    (rejectedCount > 0 ? `  ❌ REJECTED: <b>${rejectedCount}</b>\n` : '')
   );
 }
+
