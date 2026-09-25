@@ -11,11 +11,9 @@ let memorySession = {
 function getKvCredentials() {
   const envKeys = Object.keys(process.env);
   
-  // Prioritas nama standar
   let url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.REDIS_REST_API_URL || process.env.STORAGE_REST_API_URL || process.env.STORAGE_URL;
   let token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.REDIS_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || process.env.STORAGE_TOKEN;
 
-  // Fallback: cari otomatis key env apapun yang berakhiran _URL atau _TOKEN dari Upstash/Storage/KV/Redis
   if (!url) {
     const foundKey = envKeys.find(k => 
       (k.includes('REDIS') || k.includes('UPSTASH') || k.includes('KV') || k.includes('STORAGE')) &&
@@ -38,14 +36,6 @@ function getKvCredentials() {
 const STATE_FILE = path.resolve('.state.json');
 const ENV_FILE = path.resolve('.env');
 
-/**
- * Mengambil sesi aktif (Token & Cookie)
- * Urutan prioritas:
- * 1. Vercel KV / Upstash Redis (jika terhubung)
- * 2. In-memory runtime cache
- * 3. File .state.json lokal
- * 4. process.env
- */
 export async function getSession() {
   const { url: KV_URL, token: KV_TOKEN } = getKvCredentials();
   if (KV_URL && KV_TOKEN) {
@@ -89,15 +79,11 @@ export async function getSession() {
   };
 }
 
-/**
- * Menyimpan sesi baru ke semua storage yang tersedia
- */
 export async function saveSession({ token, cookie }) {
   if (token) memorySession.token = token.trim().replace(/^Bearer\s+/i, '');
   if (cookie) memorySession.cookie = cookie.trim();
   memorySession.updatedAt = new Date().toISOString();
 
-  // 1. Simpan ke Vercel KV / Upstash Redis
   const { url: KV_URL, token: KV_TOKEN } = getKvCredentials();
   if (KV_URL && KV_TOKEN) {
     try {
@@ -115,7 +101,6 @@ export async function saveSession({ token, cookie }) {
     }
   }
 
-  // 2. Simpan ke .state.json & .env (di lingkungan lokal / self-hosted)
   try {
     let state = {};
     if (fs.existsSync(STATE_FILE)) {
@@ -136,9 +121,42 @@ export async function saveSession({ token, cookie }) {
       }
       fs.writeFileSync(ENV_FILE, envContent, 'utf-8');
     }
-  } catch (_) {
-    // Di Vercel serverless filesystem read-only, write fail adalah normal dan aman di-ignore
-  }
+  } catch (_) {}
 
   return memorySession;
+}
+
+export async function refreshAccessToken(currentCookie) {
+  if (!currentCookie) return null;
+  console.log('🔄 Mencoba auto-refresh access token ke MagangHub...');
+  try {
+    const res = await axios.post(
+      'https://monev-api.maganghub.kemnaker.go.id/api/v1/auth/refresh',
+      null,
+      {
+        headers: {
+          Cookie: currentCookie,
+          Origin: 'https://monev.maganghub.kemnaker.go.id',
+          Referer: 'https://monev.maganghub.kemnaker.go.id/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const newToken = res.data?.access_token || res.data?.token || res.data?.data?.token;
+    if (newToken) {
+      let newCookie = currentCookie;
+      const setCookies = res.headers['set-cookie'];
+      if (setCookies && setCookies.length > 0) {
+        newCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+      }
+
+      await saveSession({ token: newToken, cookie: newCookie });
+      return { token: newToken, cookie: newCookie };
+    }
+  } catch (err) {
+    console.error('❌ Auto-refresh gagal:', err.response?.data || err.message);
+  }
+  return null;
 }
