@@ -120,8 +120,9 @@ async function checkStatus(date) {
   const state = loadState();
 
   // FITUR: ALARM MOTIVASI PAGI JAM 05:00 WIB
-  if (currentHour === 5 && state.lastMorningAlarmDate !== targetDate) {
-    console.log('🌅 Jam 05:00 WIB terdeteksi! Mengirim salam pagi & motivasi gajian...');
+  // Pakai window >= 5 && <= 6 supaya tetap jalan meski GitHub Actions delay beberapa menit
+  if (currentHour >= 5 && currentHour <= 6 && state.lastMorningAlarmDate !== targetDate) {
+    console.log('🌅 Jam 05:xx WIB terdeteksi! Mengirim salam pagi & motivasi gajian...');
     const daysUntilGajian = calculateDaysRemaining('2026-10-20T16:00:00+07:00');
     const motivationMessage = await generateMorningMotivation(daysUntilGajian);
     await sendTelegramNotification(motivationMessage, CHAT_ID);

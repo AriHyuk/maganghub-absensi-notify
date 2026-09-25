@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .state.json
-          key: state-${{ runner.os }}-${{ github.run_id }}
+          key: state-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             state-${{ runner.os }}-
 
