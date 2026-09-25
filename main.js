@@ -117,13 +117,6 @@ async function checkStatus(date) {
   const timeStr = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' });
   console.log(`[${timeStr} WIB] 🔍 Mengecek status absensi untuk tanggal: ${targetDate}...`);
 
-  // 🧪 FITUR TEST: NOTIFIKASI PING TIAP KALI RUN (UNTUK DICOBA)
-  console.log('🧪 Mengirim test notifikasi (ping)...');
-  await sendTelegramNotification(
-    `🧪 <b>[TEST PING]</b> Bot berhasil berjalan via GitHub Actions!\n🕒 Waktu eksekusi: <b>${timeStr} WIB</b>`,
-    CHAT_ID
-  );
-
   const state = loadState();
 
   // FITUR: ALARM MOTIVASI PAGI JAM 05:00 WIB
