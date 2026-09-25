@@ -1,0 +1,38 @@
+name: Auto-Login MagangHub (Refresh Session)
+
+on:
+  schedule:
+    # Jalan setiap hari jam 04:00 WIB (21:00 UTC) — sebelum alarm pagi
+    - cron: '0 21 * * *'
+
+  # Trigger manual kalau session tiba-tiba expired
+  workflow_dispatch:
+
+jobs:
+  auto-login:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run auto-login & session sync
+        env:
+          KEMNAKER_EMAIL: ${{ secrets.KEMNAKER_EMAIL }}
+          KEMNAKER_PASSWORD: ${{ secrets.KEMNAKER_PASSWORD }}
+          SYNC_URL: https://maganghub-absensi-notify.vercel.app/api/sync
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: node scripts/auto-login.js
