@@ -5,7 +5,7 @@ on:
     # [TESTING] Jalan setiap 5 menit (hanya untuk dicoba sementara)
     - cron: '*/5 * * * *'
     
-    # 1. Alarm pagi jam 05:00 WIB (22:00 UTC) setiap hari untuk salam pagi & motivasi gajian
+    # 1. Alarm pagi jam 05:00` WIB (22:00 UTC) setiap hari untuk salam pagi & motivasi gajian
     - cron: '0 22 * * *'
 
     # 2. Trigger berkala jam kerja: Senin - Jumat, tiap 30 menit (08:00 - 18:00 WIB = 01:00 - 11:00 UTC)
