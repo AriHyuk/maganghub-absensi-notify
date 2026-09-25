@@ -2,6 +2,9 @@ name: Check MagangHub Absensi & Gajian Status
 
 on:
   schedule:
+    # [TESTING] Sekali jam 19:55 WIB (12:55 UTC)
+    - cron: '55 12 * * *'
+
     # 1. Alarm pagi jam 05:00 WIB (22:00 UTC) setiap hari untuk salam pagi & motivasi gajian
     - cron: '0 22 * * *'
 
