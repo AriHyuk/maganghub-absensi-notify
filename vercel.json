@@ -10,6 +10,14 @@
     {
       "path": "/api/refresh",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "*/30 1-11 * * 1-5"
     }
   ]
 }
