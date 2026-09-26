@@ -463,9 +463,16 @@ async function main() {
   }
 
   if (isRunOnce) {
-    // Heartbeat: konfirmasi workflow aktif (hanya di CI, tidak spam di daemon)
     const timeStr = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' });
     console.log(`🚀 Menjalankan mode: Single Run (${timeStr} WIB)...`);
+
+    // Heartbeat — konfirmasi workflow GitHub Actions beneran jalan
+    await sendTelegramNotification(
+      `🟢 <b>GitHub Actions: Workflow Aktif</b>\n\n` +
+      `🕒 Dijalankan: <code>${timeStr} WIB</code>\n` +
+      `📡 Sedang cek status absensi...`
+    );
+
     await checkStatus();
     console.log('✅ Selesai.');
     process.exit(0);

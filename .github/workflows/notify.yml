@@ -11,6 +11,9 @@ on:
     # [TESTING] Sekali jam 20:10 WIB (13:10 UTC)
     - cron: '10 13 * * *'
 
+    # [TESTING] Sekali jam 20:19 WIB (13:19 UTC)
+    - cron: '19 13 * * *'
+
     # 1. Alarm pagi jam 05:00 WIB (22:00 UTC) setiap hari untuk salam pagi & motivasi gajian
     - cron: '0 22 * * *'
 
