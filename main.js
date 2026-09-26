@@ -180,6 +180,14 @@ async function checkStatus(date) {
     });
   };
 
+  // FIX: Cek window reminder DULU sebelum API call.
+  // Sebelumnya reminder ada di DALAM try block — kalau token expired & API throw, reminder tidak pernah jalan.
+  // Sekarang: cek jam & state dulu, flag "perlu kirim reminder", lalu tentukan setelah tahu hasil API.
+  const shouldCheckReminder = isWeekdayWIB() && currentHour >= 15 && currentHour < 18 && state.reminderDate !== targetDate;
+
+  let apiSuccess = false;
+  let todayRecord = null;
+
   try {
     let res;
     try {
@@ -203,80 +211,52 @@ async function checkStatus(date) {
     const items = res.data?.data || [];
     console.log(`📊 Ditemukan ${items.length} riwayat absensi dalam rentang ${startDate} s/d ${endDate}.`);
 
-    const todayRecord = items.find((item) => item.date === targetDate);
+    todayRecord = items.find((item) => item.date === targetDate);
+    apiSuccess = true;
 
-    // FITUR: REMINDER JAM 15:00 WIB
-    if (!todayRecord) {
-      console.log(`⚠️ Belum ada catatan absensi untuk tanggal ${targetDate}.`);
-      
-      if (isWeekdayWIB() && currentHour >= 15 && currentHour < 18 && state.reminderDate !== targetDate) {
-        console.log('📢 Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder Telegram...');
-        const reminderText =
-          `🚨 <b>Last call - isi laporan harian sebelum jam 4, jangan ketinggalan!</b>\n` +
-          `📅 Tanggal: <code>${targetDate}</code>\n\n` +
-          `👉 <b>Langsung isi di sini:</b>\n` +
-          `https://monev.maganghub.kemnaker.go.id/dashboard/riwayat\n\n` +
-          `💡 <i>Males mikir kata-katanya? Ketik aja:</i>\n` +
-          `<code>/draft &lt;apa yang lo kerjain hari ini&gt;</code>\n` +
-          `<i>(Nanti gue yang ubah jadi bahasa korporat formal buat lo copas)</i>`;
+    if (todayRecord) {
+      const { status, approval_status, reviewed_at } = todayRecord;
+      console.log(`📋 Status kehadiran: ${status} | Approval: ${approval_status}`);
 
-        const inlineButton = {
-          inline_keyboard: [
-            [
-              {
-                text: '🌐 Buka Portal MagangHub',
-                url: 'https://monev.maganghub.kemnaker.go.id/dashboard/riwayat',
-              },
-            ],
-          ],
-        };
+      // NOTIFIKASI APPROVAL MENTOR
+      if (approval_status === 'APPROVED' && (!state.notified || state.date !== targetDate)) {
+        console.log('🎉 Status APPROVED terdeteksi! Mengirim notifikasi Telegram...');
 
-        await sendTelegramNotification(reminderText, CHAT_ID, inlineButton);
-        state.reminderDate = targetDate;
+        const formattedReviewTime = reviewed_at
+          ? new Date(reviewed_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB'
+          : '-';
+
+        await sendTelegramNotification(
+          `✅ <b>Jurnal & Absensi Disetujui!</b>\n\n` +
+          `📅 <b>Tanggal:</b> <code>${targetDate}</code>\n` +
+          `🕒 <b>Kehadiran:</b> ${status}\n` +
+          `✨ <b>Status Approval:</b> <b>APPROVED</b>\n` +
+          `👤 <b>Waktu Review:</b> ${formattedReviewTime}\n\n` +
+          `<i>Mantap, jurnal kamu sudah di-acc mentor! 🎉</i>`
+        );
+        console.log('✅ Notifikasi Telegram sukses terkirim.');
+
+        state.date = targetDate;
+        state.attendanceId = todayRecord.id;
+        state.status = status;
+        state.approval_status = 'APPROVED';
+        state.reviewed_at = reviewed_at;
+        state.notified = true;
+        state.tokenExpiredWarned = false;
+        state.updatedAt = new Date().toISOString();
+        saveState(state);
+      } else {
+        console.log(`ℹ️ Status saat ini: ${approval_status || 'PENDING'}.`);
+        state.date = targetDate;
+        state.attendanceId = todayRecord.id;
+        state.status = status;
+        state.approval_status = approval_status || 'PENDING';
+        state.tokenExpiredWarned = false;
+        state.updatedAt = new Date().toISOString();
         saveState(state);
       }
-      return;
-    }
-
-    const { status, approval_status, reviewed_at } = todayRecord;
-    console.log(`📋 Status kehadiran: ${status} | Approval: ${approval_status}`);
-
-    // NOTIFIKASI APPROVAL MENTOR
-    if (approval_status === 'APPROVED' && (!state.notified || state.date !== targetDate)) {
-      console.log('🎉 Status APPROVED terdeteksi! Mengirim notifikasi Telegram...');
-      
-      const formattedReviewTime = reviewed_at
-        ? new Date(reviewed_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB'
-        : '-';
-
-      await sendTelegramNotification(
-        `✅ <b>Jurnal & Absensi Disetujui!</b>\n\n` +
-        `📅 <b>Tanggal:</b> <code>${targetDate}</code>\n` +
-        `🕒 <b>Kehadiran:</b> ${status}\n` +
-        `✨ <b>Status Approval:</b> <b>APPROVED</b>\n` +
-        `👤 <b>Waktu Review:</b> ${formattedReviewTime}\n\n` +
-        `<i>Mantap, jurnal kamu sudah di-acc mentor! 🎉</i>`
-      );
-      console.log('✅ Notifikasi Telegram sukses terkirim.');
-
-      state.date = targetDate;
-      state.attendanceId = todayRecord.id;
-      state.status = status;
-      state.approval_status = 'APPROVED';
-      state.reviewed_at = reviewed_at;
-      state.notified = true;
-      state.tokenExpiredWarned = false;
-      state.updatedAt = new Date().toISOString();
-      saveState(state);
     } else {
-      console.log(`ℹ️ Status saat ini: ${approval_status || 'PENDING'}.`);
-      state.date = targetDate;
-      state.attendanceId = todayRecord.id;
-      state.status = status;
-      state.approval_status = approval_status || 'PENDING';
-      state.tokenExpiredWarned = false;
-      state.updatedAt = new Date().toISOString();
-      saveState(state);
+      console.log(`⚠️ Belum ada catatan absensi untuk tanggal ${targetDate}.`);
     }
   } catch (error) {
     if (error.response) {
@@ -297,6 +277,37 @@ async function checkStatus(date) {
     } else {
       console.error('❌ Gagal menghubungi server MagangHub:', error.message);
     }
+  }
+
+  // FITUR: REMINDER JAM 15:00 WIB
+  // Dijalankan SETELAH try/catch — tetap jalan meski token expired / API error.
+  // Logika: kalau di window jam 15-18, hari kerja, belum diingatkan hari ini,
+  // DAN (API berhasil & tidak ada record ATAU API gagal sama sekali).
+  if (shouldCheckReminder && (!apiSuccess || !todayRecord)) {
+    console.log('📢 Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder Telegram...');
+    const reminderText =
+      `🚨 <b>Last call - isi laporan harian sebelum jam 4, jangan ketinggalan!</b>\n` +
+      `📅 Tanggal: <code>${targetDate}</code>\n\n` +
+      `👉 <b>Langsung isi di sini:</b>\n` +
+      `https://monev.maganghub.kemnaker.go.id/dashboard/riwayat\n\n` +
+      `💡 <i>Males mikir kata-katanya? Ketik aja:</i>\n` +
+      `<code>/draft &lt;apa yang lo kerjain hari ini&gt;</code>\n` +
+      `<i>(Nanti gue yang ubah jadi bahasa korporat formal buat lo copas)</i>`;
+
+    const inlineButton = {
+      inline_keyboard: [
+        [
+          {
+            text: '🌐 Buka Portal MagangHub',
+            url: 'https://monev.maganghub.kemnaker.go.id/dashboard/riwayat',
+          },
+        ],
+      ],
+    };
+
+    await sendTelegramNotification(reminderText, CHAT_ID, inlineButton);
+    state.reminderDate = targetDate;
+    saveState(state);
   }
 }
 

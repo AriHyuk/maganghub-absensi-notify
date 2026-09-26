@@ -36,7 +36,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .state.json
-          key: state-${{ runner.os }}-${{ github.sha }}
+          # Pakai tanggal sebagai key supaya state persist dalam 1 hari (tidak reset tiap commit)
+          key: state-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             state-${{ runner.os }}-
 
