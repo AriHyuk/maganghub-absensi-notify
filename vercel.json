@@ -21,11 +21,11 @@
     },
     {
       "path": "/api/cron",
-      "schedule": "41 13 * * *"
+      "schedule": "49 13 * * *"
     },
     {
       "path": "/api/cron",
-      "schedule": "42 13 * * *"
+      "schedule": "50 13 * * *"
     }
   ]
 }
