@@ -14,18 +14,6 @@
     {
       "path": "/api/cron",
       "schedule": "0 22 * * *"
-    },
-    {
-      "path": "/api/cron",
-      "schedule": "*/30 1-11 * * 1-5"
-    },
-    {
-      "path": "/api/cron",
-      "schedule": "49 13 * * *"
-    },
-    {
-      "path": "/api/cron",
-      "schedule": "50 13 * * *"
     }
   ]
 }
