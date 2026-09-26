@@ -211,6 +211,19 @@ export default async function handler(req, res) {
         } else {
           console.log('⏭️ Reminder hari ini sudah dikirim, skip.');
         }
+      } else if (!isWeekdayWIB() && currentHour >= 15 && currentHour < 23) {
+        // [BARU] Kalo weekend, kirim notif liburan 1x aja buat gantiin reminder
+        const weekendKey = `weekend_sent_${targetDate}`;
+        const alreadySent = await kvGet(weekendKey);
+        if (!alreadySent) {
+          console.log('🏖️ Weekend terdeteksi! Mengirim pesan liburan...');
+          const weekendText = 
+            `🏖️ <b>Weekend Vibe Check!</b>\n\n` +
+            `Hari ini libur bosku (Sabtu/Minggu). Gak usah mikirin absen atau jurnal MagangHub!\n\n` +
+            `<i>"Rebahan adalah jalan ninjaku."</i> Selamat beristirahat! 🎮🍕😴`;
+          await sendTelegramNotification(weekendText, CHAT_ID);
+          await kvSet(weekendKey, '1', 86400); // lock 24 jam
+        }
       }
       return res.status(200).json({ status: 'ok', attendance: 'none' });
     }

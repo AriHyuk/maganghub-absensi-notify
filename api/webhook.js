@@ -128,6 +128,10 @@ async function getMagangStatus() {
     const todayRecord = items.find((i) => i.date === today);
 
     if (!todayRecord) {
+      const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })).getDay();
+      if (day === 0 || day === 6) {
+        return `📅 <b>Tanggal:</b> <code>${today}</code>\n🏖️ <i>Hari ini libur weekend bosku, selamat menikmati hari santai! (Tidak ada kewajiban absen)</i>`;
+      }
       return `📅 <b>Tanggal:</b> <code>${today}</code>\n⚠️ <i>Belum ada catatan absensi/jurnal hari ini (Belum clock-in).</i>`;
     }
 
