@@ -439,15 +439,33 @@ async function main() {
   const session = await getSession();
   const activeToken = session.token || AUTH_TOKEN;
 
-  if (!activeToken || !PARTICIPANT_ID || !TELEGRAM_TOKEN || !CHAT_ID) {
-    console.error('❌ Harap lengkapi AUTH_TOKEN / Database Session, PARTICIPANT_ID, TG_TOKEN, dan TG_CHAT_ID!');
+  const isRunOnce = process.argv.includes('--once') || process.env.GITHUB_ACTIONS === 'true';
+
+  // Validasi env — tapi jangan exit diam-diam tanpa notif kalau TG sudah tersedia
+  if (!TELEGRAM_TOKEN || !CHAT_ID) {
+    console.error('❌ TG_TOKEN dan TG_CHAT_ID wajib diset!');
     process.exit(1);
   }
 
-  const isRunOnce = process.argv.includes('--once') || process.env.GITHUB_ACTIONS === 'true';
+  if (!activeToken) {
+    console.error('❌ Tidak ada token — kirim notif peringatan ke Telegram...');
+    await sendTelegramNotification(
+      `🔴 <b>Bot Absensi: Token Tidak Tersedia!</b>\n\n` +
+      `Workflow jalan tapi tidak ada token MagangHub.\n` +
+      `Silakan kirim token via <code>/token eyJ...</code> atau sync via bookmarklet.`
+    );
+    process.exit(1);
+  }
+
+  if (!PARTICIPANT_ID) {
+    console.error('❌ PARTICIPANT_ID belum diset!');
+    process.exit(1);
+  }
 
   if (isRunOnce) {
-    console.log('🚀 Menjalankan mode: Single Run...');
+    // Heartbeat: konfirmasi workflow aktif (hanya di CI, tidak spam di daemon)
+    const timeStr = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' });
+    console.log(`🚀 Menjalankan mode: Single Run (${timeStr} WIB)...`);
     await checkStatus();
     console.log('✅ Selesai.');
     process.exit(0);
