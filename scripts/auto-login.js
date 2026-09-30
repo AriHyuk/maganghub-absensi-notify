@@ -85,52 +85,34 @@ async function autoLogin() {
     });
 
     // FIX: MagangHub sekarang pakai SSO terpusat Kemnaker (account.kemnaker.go.id/auth).
-    // Sebelumnya waitForURL hanya match '**/auth/login**' — pattern itu tidak pernah terpenuhi
-    // karena redirect langsung loncat ke domain SSO eksternal.
+    // Tunggu sampai halaman benar-benar me-render form login (tunggu selector #username atau input name="username").
+    // Jangan hanya mengandalkan waitForURL karena bisa nyangkut di URL transit/redirect SSO.
     console.log('⏳ Menunggu redirect ke halaman login (MagangHub atau SSO Kemnaker)...');
-    await page.waitForURL(
-      (url) => {
-        try {
-          const u = new URL(url);
-          return (
-            u.pathname.includes('/auth/login') ||
-            u.pathname.includes('/login') ||
-            u.hostname === 'account.kemnaker.go.id'
-          );
-        } catch (_) {
-          return false;
-        }
-      },
-      { timeout: 20000 }
-    );
-
-    const currentUrl = page.url();
-    console.log(`📝 Halaman login terdeteksi: ${currentUrl}`);
-
-    // Deteksi apakah ini SSO Kemnaker atau form login MagangHub langsung
-    const isSSOKemnaker = new URL(currentUrl).hostname === 'account.kemnaker.go.id';
-    console.log(
-      isSSOKemnaker
-        ? '🔑 Terdeteksi SSO Kemnaker — mengisi form di account.kemnaker.go.id...'
-        : '🔑 Terdeteksi form login MagangHub langsung...'
-    );
-
-    // Isi field email/handphone — multi-selector fallback untuk berbagai variasi form SSO Kemnaker
+    
+    // Multi-selector fallback untuk berbagai variasi form SSO Kemnaker
     const emailSelectors = [
+      '#username',
       'input[name="username"]',
       'input[name="email"]',
       'input[type="email"]',
       'input[placeholder*="email" i]',
-      'input[placeholder*="handphone" i]',
-      'input[placeholder*="No. Handphone" i]',
-      'input[placeholder*="username" i]',
-      'input[type="text"]',
+      'input[placeholder*="handphone" i]'
     ];
 
     let emailFilled = false;
+    
+    // Tunggu salah satu selector muncul dengan timeout 30 detik (menunggu redirect selesai)
+    console.log('⏳ Menunggu input email/username muncul...');
+    
     for (const selector of emailSelectors) {
       try {
-        await page.waitForSelector(selector, { timeout: 3000 });
+        // Tunggu maksimal 10 detik per selector, tapi karena ini berurutan,
+        // lebih baik kita kumpulkan semua selector lalu tunggu yang mana saja pakai locator.or() atau string koma
+        // Tapi untuk simple-nya, kita bikin selector gabungan pakai koma (CSS selector OR)
+        const combinedSelector = emailSelectors.join(', ');
+        await page.waitForSelector(combinedSelector, { timeout: 30000 });
+        
+        // Coba isi satu per satu yang visible
         await page.fill(selector, EMAIL);
         console.log(`✅ Email diisi via selector: ${selector}`);
         emailFilled = true;
@@ -141,6 +123,9 @@ async function autoLogin() {
     if (!emailFilled) {
       throw new Error('Tidak dapat menemukan input field email/username di halaman login');
     }
+
+    const currentUrl = page.url();
+    console.log(`📝 Halaman login terdeteksi: ${currentUrl}`);
 
     // Isi password
     await page.waitForSelector('input[type="password"]', { timeout: 10000 });
@@ -202,6 +187,12 @@ async function autoLogin() {
 
     // Gabungkan semua cookies jadi satu string
     const cookieStr = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+
+    // Tunggu sejenak buat ngasih waktu ke interceptor response nangkep tokennya (async)
+    for (let i = 0; i < 15; i++) {
+      if (capturedAccessToken) break;
+      await page.waitForTimeout(500); // Wait 500ms * 15 = 7.5 detik max
+    }
 
     // Jika access token belum dicapture dari intercept, coba dari localStorage
     if (!capturedAccessToken) {
