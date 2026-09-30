@@ -186,7 +186,7 @@ export default async function handler(req, res) {
     // FITUR 3: REMINDER ABSEN JAM 15:00 WIB (dengan deduplication via KV)
     if (!todayRecord) {
       if (isWeekdayWIB() && currentHour >= 0 && currentHour < 23) {
-        const reminderKey = `reminder_sent_${targetDate}`;
+        const reminderKey = `reminder_sent_${targetDate}_test2`;
         const alreadySent = await kvGet(reminderKey);
         if (!alreadySent) {
           console.log('⏰ Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder...');
