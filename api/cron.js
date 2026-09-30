@@ -229,37 +229,18 @@ export default async function handler(req, res) {
     }
 
     // FITUR 4: NOTIFIKASI APPROVAL MENTOR (dengan deduplication via KV)
-    const { status, approval_status, reviewed_at } = todayRecord;
-    if (approval_status === 'APPROVED') {
-      const approvedKey = `approved_notif_${targetDate}`;
-      const alreadyNotified = await kvGet(approvedKey);
-      if (!alreadyNotified) {
-        console.log('🎉 Status APPROVED terdeteksi! Mengirim notifikasi...');
-        const formattedReviewTime = reviewed_at
-          ? new Date(reviewed_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB'
-          : '-';
-
-        await sendTelegramNotification(
-          `🎉 <b>Jurnal & Absensi Disetujui!</b>\n\n` +
-          `👤 <b>${progress.name}</b> — <code>${progress.role}</code>\n` +
-          `🎯 <b>HARI KE-${progress.currentDay} DARI ${progress.totalDays}</b> (Sisa ${progress.remainingDays} hari · ${progress.batch})\n` +
-          `📈 Progress: ${progress.progressBar}\n\n` +
-          `📅 <b>Tanggal:</b> <code>${targetDate}</code>\n` +
-          `📍 <b>Kehadiran:</b> ${status}\n` +
-          `⭐ <b>Status Approval:</b> <b>APPROVED</b>\n` +
-          `⏱️ <b>Waktu Review:</b> ${formattedReviewTime}\n\n` +
-          `<i>Mantap, jurnal kamu sudah di-acc mentor! 🚀</i>`
-        );
-        await kvSet(approvedKey, '1', 86400); // lock 24 jam
-      } else {
-        console.log('⏭️ Notif APPROVED sudah dikirim hari ini, skip.');
-      }
-    }
+    const { status, approval_status, reviewed_at } = todayRecord || {};
+    // (Bypass notifikasi approval)
 
     return res.status(200).json({
       status: 'ok',
-      attendance: status,
+      attendance: status || 'none',
       approval: approval_status,
+      debug: {
+        has_tg_token: !!TELEGRAM_TOKEN,
+        has_chat_id: !!CHAT_ID,
+        chat_id_value: CHAT_ID,
+      }
     });
   } catch (err) {
     console.error('❌ Error cron handler:', err.message);
