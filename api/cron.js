@@ -34,7 +34,7 @@ function isWeekdayWIB() {
 }
 
 async function sendTelegramNotification(text, targetChatId = CHAT_ID, replyMarkup = null) {
-  if (!TELEGRAM_TOKEN || !targetChatId) return;
+  if (!TELEGRAM_TOKEN || !targetChatId) return 'No token or chat ID';
   const tgUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   try {
     await axios.post(tgUrl, {
@@ -43,8 +43,10 @@ async function sendTelegramNotification(text, targetChatId = CHAT_ID, replyMarku
       parse_mode: 'HTML',
       ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     });
+    return 'Success';
   } catch (err) {
     console.error('❌ Gagal mengirim notifikasi Telegram:', err.message);
+    return err.response?.data?.description || err.message;
   }
 }
 
@@ -184,6 +186,7 @@ export default async function handler(req, res) {
     const progress = calculateInternshipProgress(targetDate);
 
     // FITUR 3: REMINDER ABSEN JAM 15:00 WIB (dengan deduplication via KV)
+    let telegram_debug_msg = 'Not sent';
     if (!todayRecord) {
       if (isWeekdayWIB() && currentHour >= 0 && currentHour < 23) {
         const reminderKey = `reminder_sent_${targetDate}_test2`;
@@ -202,14 +205,17 @@ export default async function handler(req, res) {
             `<code>/draft <apa yang lo kerjain hari ini></code>\n` +
             `<i>(Nanti gue yang ubah jadi bahasa korporat formal buat lo copas)</i>`;
 
-          await sendTelegramNotification(reminderText, CHAT_ID, {
+          telegram_debug_msg = await sendTelegramNotification(reminderText, CHAT_ID, {
             inline_keyboard: [
               [{ text: '🌐 Buka Portal MagangHub', url: 'https://monev.maganghub.kemnaker.go.id/dashboard/riwayat' }],
             ],
           });
-          await kvSet(reminderKey, '1', 86400); // lock 24 jam
+          if (telegram_debug_msg === 'Success') {
+            await kvSet(reminderKey, '1', 86400); // lock 24 jam only if success
+          }
         } else {
           console.log('⏭️ Reminder hari ini sudah dikirim, skip.');
+          telegram_debug_msg = 'Skipped due to cache';
         }
       } else if (!isWeekdayWIB() && currentHour >= 15 && currentHour < 23) {
         // [BARU] Kalo weekend, kirim notif liburan 1x aja buat gantiin reminder
@@ -221,8 +227,8 @@ export default async function handler(req, res) {
             `🏖️ <b>Weekend Vibe Check!</b>\n\n` +
             `Hari ini libur bosku (Sabtu/Minggu). Gak usah mikirin absen atau jurnal MagangHub!\n\n` +
             `<i>"Rebahan adalah jalan ninjaku."</i> Selamat beristirahat! 🎮🍕😴`;
-          await sendTelegramNotification(weekendText, CHAT_ID);
-          await kvSet(weekendKey, '1', 86400); // lock 24 jam
+          telegram_debug_msg = await sendTelegramNotification(weekendText, CHAT_ID);
+          if (telegram_debug_msg === 'Success') await kvSet(weekendKey, '1', 86400); // lock 24 jam
         }
       }
       return res.status(200).json({ 
@@ -232,6 +238,7 @@ export default async function handler(req, res) {
           has_tg_token: !!TELEGRAM_TOKEN,
           has_chat_id: !!CHAT_ID,
           chat_id_value: CHAT_ID,
+          telegram_error: telegram_debug_msg
         }
       });
     }
