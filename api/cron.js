@@ -225,7 +225,15 @@ export default async function handler(req, res) {
           await kvSet(weekendKey, '1', 86400); // lock 24 jam
         }
       }
-      return res.status(200).json({ status: 'ok', attendance: 'none' });
+      return res.status(200).json({ 
+        status: 'ok', 
+        attendance: 'none',
+        debug: {
+          has_tg_token: !!TELEGRAM_TOKEN,
+          has_chat_id: !!CHAT_ID,
+          chat_id_value: CHAT_ID,
+        }
+      });
     }
 
     // FITUR 4: NOTIFIKASI APPROVAL MENTOR (dengan deduplication via KV)
