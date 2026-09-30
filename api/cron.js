@@ -189,7 +189,7 @@ export default async function handler(req, res) {
     let telegram_debug_msg = 'Not sent';
     if (!todayRecord) {
       if (isWeekdayWIB() && currentHour >= 0 && currentHour < 23) {
-        const reminderKey = `reminder_sent_${targetDate}_test3`;
+        const reminderKey = `reminder_sent_${targetDate}_test4`;
         const alreadySent = await kvGet(reminderKey);
         if (!alreadySent) {
           console.log('⏰ Jam 15:00+ terdeteksi dan jurnal belum diisi. Mengirim reminder...');
@@ -202,7 +202,7 @@ export default async function handler(req, res) {
             `🔗 <b>Langsung isi di sini:</b>\n` +
             `https://monev.maganghub.kemnaker.go.id/dashboard/riwayat\n\n` +
             `💡 <i>Males mikir kata-katanya? Ketik aja di bot Telegram:</i>\n` +
-            `<code>/draft <apa yang lo kerjain hari ini></code>\n` +
+            `<code>/draft [apa yang lo kerjain hari ini]</code>\n` +
             `<i>(Nanti gue yang ubah jadi bahasa korporat formal buat lo copas)</i>`;
 
           telegram_debug_msg = await sendTelegramNotification(reminderText, CHAT_ID, {
