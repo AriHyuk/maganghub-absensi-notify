@@ -1,11 +1,10 @@
 name: Auto-Login MagangHub (Refresh Session)
 
 on:
-  schedule:
-    # Jalan setiap 3 jam
-    - cron: '0 */3 * * *'
+  # Schedule dimatikan — auto-login sekarang dihandle via server lokal
+  # - cron: '0 */3 * * *'
 
-  # Trigger manual kalau session tiba-tiba expired
+  # Trigger manual kalau dibutuhkan
   workflow_dispatch:
 
 jobs:
